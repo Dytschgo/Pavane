@@ -954,6 +954,7 @@ export function App() {
                       ].map(({ icon: Icon, text, prompt }) => (
                         <button
                           key={text}
+                          disabled={native && !currentId}
                           onClick={() => {
                             changeDraft(prompt);
                             composer.current?.focus();
@@ -1102,7 +1103,7 @@ export function App() {
                     placeholder="Ask anything…"
                     value={draft}
                     onChange={(event) => changeDraft(event.target.value)}
-                    disabled={loading || busy}
+                    disabled={loading || busy || (native && !currentId)}
                     maxLength={65536}
                     onKeyDown={(event) => {
                       if (

@@ -186,5 +186,6 @@ it("does not leave loading stuck when opening an already-expired sidebar row", a
   await waitFor(() =>
     expect(screen.queryByText("Opening your chat…")).not.toBeInTheDocument(),
   );
-  expect(input).toBeEnabled();
+  expect(input).toBeDisabled();
+  expect(screen.getByRole("button", { name: "New chat" })).toBeEnabled();
 });
