@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
@@ -80,6 +80,13 @@ pub struct Status {
 pub struct Manager {
     client: tokio::sync::Mutex<Option<Arc<Client>>>,
     workspace: PathBuf,
+    ownership: Ownership,
+}
+
+struct Ownership {
+    stopping: AtomicBool,
+    children: Mutex<Vec<Weak<Client>>>,
+    scope: Mutex<Option<crate::process_scope::ProcessScope>>,
 }
 
 impl Manager {
@@ -87,10 +94,18 @@ impl Manager {
         Self {
             client: tokio::sync::Mutex::new(None),
             workspace,
+            ownership: Ownership {
+                stopping: AtomicBool::new(false),
+                children: Mutex::new(vec![]),
+                scope: Mutex::new(None),
+            },
         }
     }
 
     async fn get(&self) -> Result<Arc<Client>, String> {
+        if self.ownership.stopping.load(Ordering::Acquire) {
+            return Err("Pavane is closing.".into());
+        }
         let mut slot = self.client.lock().await;
         if let Some(client) = slot
             .as_ref()
@@ -105,14 +120,15 @@ impl Manager {
             .map_err(|_| "Unable to create the local chat workspace.".to_string())?;
         // Empty tables merge with user config. Discover names without retaining credentials,
         // then explicitly disable every inherited server/plugin in the actual process.
-        let bootstrap = Client::spawn(&executable, &self.workspace, &[]).await?;
+        let bootstrap = Client::spawn(&executable, &self.workspace, &[], &self.ownership).await?;
         let config = bootstrap
             .request("config/read", json!({"includeLayers":false}))
             .await;
         bootstrap.shutdown();
         let config = config?;
         let overrides = disabled_integrations(&config["config"])?;
-        let client = Client::spawn(&executable, &self.workspace, &overrides).await?;
+        let client =
+            Client::spawn(&executable, &self.workspace, &overrides, &self.ownership).await?;
         let effective = client
             .request("config/read", json!({"includeLayers":false}))
             .await?;
@@ -191,6 +207,16 @@ impl Manager {
         mut on_delta: impl FnMut(&str) -> Result<(), String>,
     ) -> Result<(), String> {
         let client = self.get().await?;
+        let default_effort = {
+            let models = client
+                .models
+                .lock()
+                .map_err(|_| "Codex model catalog is unavailable.")?;
+            models
+                .iter()
+                .find(|entry| entry.id == format!("codex:{model}"))
+                .and_then(|entry| entry.default_reasoning_effort.clone())
+        };
         let started = client.request("thread/start", json!({
             "model":model,"modelProvider":"openai","cwd":self.workspace,"sandbox":"read-only",
             "approvalPolicy":"on-request","approvalsReviewer":"user","ephemeral":true,
@@ -236,12 +262,14 @@ impl Manager {
                 .map_err(|_| "Unable to prepare the chat context.")?
         );
         let mut params = json!({"threadId":thread,"model":model,"input":[{"type":"text","text":input}],"approvalPolicy":"on-request","approvalsReviewer":"user","sandboxPolicy":{"type":"readOnly","networkAccess":false},"summary":"none"});
-        if let Some(effort) = &options.reasoning_effort {
+        if let Some(effort) = options
+            .reasoning_effort
+            .as_ref()
+            .or(default_effort.as_ref())
+        {
             params["effort"] = json!(effort);
         }
-        if let Some(tier) = &options.service_tier {
-            params["serviceTier"] = json!(tier);
-        }
+        params["serviceTier"] = json!(options.service_tier.as_deref().unwrap_or("default"));
         let turn = client.request("turn/start", params).await?;
         if let Some(id) = turn["turn"]["id"].as_str() {
             client.record_turn(&thread, id);
@@ -260,9 +288,15 @@ impl Manager {
     }
 
     pub fn shutdown(&self) {
-        if let Ok(slot) = self.client.try_lock() {
-            if let Some(client) = slot.as_ref() {
-                client.shutdown();
+        self.ownership.stopping.store(true, Ordering::Release);
+        if let Ok(children) = self.ownership.children.lock() {
+            for child in children.iter().filter_map(Weak::upgrade) {
+                child.shutdown();
+            }
+        }
+        if let Ok(scope) = self.ownership.scope.lock() {
+            if let Some(scope) = scope.as_ref() {
+                scope.terminate();
             }
         }
     }
@@ -289,11 +323,50 @@ struct Client {
     models: Mutex<Vec<Model>>,
 }
 
+struct PendingRequest<'a> {
+    client: &'a Client,
+    id: u64,
+    writing: bool,
+}
+impl Drop for PendingRequest<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut pending) = self.client.pending.lock() {
+            pending.remove(&self.id);
+        }
+        // Cancelling a partial JSONL write would corrupt the next request.
+        if self.writing {
+            self.client.shutdown();
+        }
+    }
+}
+
+fn deliver_response(
+    pending: &Mutex<HashMap<u64, Reply>>,
+    id: u64,
+    value: &Value,
+) -> Option<String> {
+    let reply = pending.lock().ok()?.remove(&id);
+    let result = if value.get("error").is_some() {
+        Err("Codex rejected this request. Check the selected model, sign-in and connection.".into())
+    } else {
+        Ok(value["result"].clone())
+    };
+    let delivered = reply.is_some_and(|reply| reply.send(result).is_ok());
+    // A cancelled thread/start may still succeed remotely. Release that late
+    // ephemeral session even when nobody is waiting for its response anymore.
+    if !delivered {
+        value["result"]["thread"]["id"].as_str().map(str::to_owned)
+    } else {
+        None
+    }
+}
+
 impl Client {
     async fn spawn(
         executable: &Path,
         cwd: &Path,
         overrides: &[String],
+        ownership: &Ownership,
     ) -> Result<Arc<Self>, String> {
         let mut command = Command::new(executable);
         command.args(["app-server", "--listen", "stdio://"]);
@@ -311,9 +384,26 @@ impl Client {
             .kill_on_drop(true);
         #[cfg(windows)]
         command.creation_flags(0x08000000);
-        let mut child = command
+        let child = command
             .spawn()
             .map_err(|_| "Codex could not start. Check its installation.".to_string())?;
+        Self::attach(child, ownership).await
+    }
+
+    async fn attach(mut child: Child, ownership: &Ownership) -> Result<Arc<Self>, String> {
+        {
+            let mut scope = ownership
+                .scope
+                .lock()
+                .map_err(|_| "Provider process scope is unavailable.")?;
+            if scope.is_none() {
+                *scope = Some(crate::process_scope::ProcessScope::new()?);
+            }
+            scope
+                .as_ref()
+                .ok_or("Provider process scope is unavailable.")?
+                .assign(&child)?;
+        }
         let writer = child.stdin.take().ok_or("Codex input is unavailable.")?;
         let stdout = child.stdout.take().ok_or("Codex output is unavailable.")?;
         let client = Arc::new(Self {
@@ -325,6 +415,18 @@ impl Client {
             dead: Arc::new(AtomicBool::new(false)),
             models: Mutex::new(vec![]),
         });
+        {
+            let mut children = ownership
+                .children
+                .lock()
+                .map_err(|_| "Provider ownership is unavailable.")?;
+            if ownership.stopping.load(Ordering::Acquire) {
+                client.shutdown();
+                return Err("Pavane is closing.".into());
+            }
+            children.retain(|child| child.strong_count() > 0);
+            children.push(Arc::downgrade(&client));
+        }
         let (pending, streams, dead) = (
             client.pending.clone(),
             client.streams.clone(),
@@ -348,9 +450,13 @@ impl Client {
                 };
                 if value.get("method").is_none() {
                     if let Some(id) = value["id"].as_u64() {
-                        if let Ok(mut map) = pending.lock() {
-                            if let Some(reply) = map.remove(&id) {
-                                let _=reply.send(if value.get("error").is_some() { Err("Codex rejected this request. Check the selected model, sign-in and connection.".into()) } else { Ok(value["result"].clone()) });
+                        if let Some(thread) = deliver_response(&pending, id, &value) {
+                            if let Some(client) = owner.upgrade() {
+                                tokio::spawn(async move {
+                                    let _ = client
+                                        .request("thread/unsubscribe", json!({"threadId":thread}))
+                                        .await;
+                                });
                             }
                         }
                     }
@@ -445,33 +551,48 @@ impl Client {
     }
 
     async fn request(&self, method: &str, params: Value) -> Result<Value, String> {
+        self.request_timeout(method, params, Duration::from_secs(30))
+            .await
+    }
+
+    async fn request_timeout(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         if self.dead.load(Ordering::Acquire) {
             return Err("Codex disconnected. Refresh to reconnect.".into());
         }
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (sender, receiver) = oneshot::channel();
-        self.pending
-            .lock()
-            .map_err(|_| "Codex is unavailable.".to_string())?
-            .insert(id, sender);
-        if let Err(error) = self
-            .write(json!({"id":id,"method":method,"params":params}))
-            .await
         {
-            if let Ok(mut map) = self.pending.lock() {
-                map.remove(&id);
+            let mut pending = self.pending.lock().map_err(|_| "Codex is unavailable.")?;
+            if pending.len() >= 64 {
+                return Err("Codex is busy. Wait for the current request.".into());
             }
-            return Err(error);
+            pending.insert(id, sender);
         }
-        let reply = tokio::time::timeout(Duration::from_secs(30), receiver).await;
-        if let Ok(mut map) = self.pending.lock() {
-            map.remove(&id);
+        let mut registration = PendingRequest {
+            client: self,
+            id,
+            writing: true,
+        };
+        let exchange = async {
+            self.write(json!({"id":id,"method":method,"params":params}))
+                .await?;
+            registration.writing = false;
+            receiver
+                .await
+                .map_err(|_| "Codex disconnected.".to_string())?
+        };
+        match tokio::time::timeout(timeout, exchange).await {
+            Ok(result) => result,
+            Err(_) => {
+                self.shutdown();
+                Err("Codex did not respond in time. Refresh the connection and try again.".into())
+            }
         }
-        reply
-            .map_err(|_| {
-                "Codex did not respond in time. Refresh the connection and try again.".to_string()
-            })?
-            .map_err(|_| "Codex disconnected.".to_string())?
     }
 
     async fn load_models(&self) -> Result<Vec<Model>, String> {
@@ -710,6 +831,135 @@ fn usage_windows(value: &Value) -> Vec<UsageWindow> {
 
 #[cfg(test)]
 mod tests {
+    fn fake_command(script: &str) -> Command {
+        let mut command = Command::new("node");
+        command
+            .args(["-e", script])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(windows)]
+        command.creation_flags(0x08000000);
+        command
+    }
+    fn owner() -> Ownership {
+        Ownership {
+            stopping: AtomicBool::new(false),
+            children: Mutex::new(vec![]),
+            scope: Mutex::new(None),
+        }
+    }
+    const INIT_ONLY: &str = r#"const r=require('node:readline').createInterface({input:process.stdin});r.on('line',line=>{const v=JSON.parse(line);if(v.method==='initialize'){process.stdout.write(JSON.stringify({id:v.id,result:{}})+'\n');process.stdin.pause();}});"#;
+
+    #[tokio::test]
+    async fn blocked_writes_have_a_deadline_and_invalidate_the_client() {
+        let ownership = owner();
+        let client = Client::attach(fake_command(INIT_ONLY).spawn().unwrap(), &ownership)
+            .await
+            .unwrap();
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            client.request_timeout(
+                "blocked",
+                json!({"large":"x".repeat(2*1024*1024)}),
+                Duration::from_millis(100),
+            ),
+        )
+        .await
+        .expect("RPC write deadline was not enforced");
+        assert!(result.is_err());
+        assert!(client.dead.load(Ordering::Acquire));
+        assert!(client.pending.lock().unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn missing_responses_invalidate_the_client_for_reconnect() {
+        let ownership = owner();
+        let client = Client::attach(fake_command(INIT_ONLY).spawn().unwrap(), &ownership)
+            .await
+            .unwrap();
+        assert!(
+            client
+                .request_timeout("no-response", json!({}), Duration::from_millis(100))
+                .await
+                .is_err()
+        );
+        assert!(client.dead.load(Ordering::Acquire));
+        assert!(client.pending.lock().unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn shutdown_owns_children_before_initialization_completes() {
+        let directory = tempfile::tempdir().unwrap();
+        let manager = Arc::new(Manager::new(directory.path().into()));
+        let child = fake_command("process.stdin.resume();setInterval(()=>{},1000)")
+            .spawn()
+            .unwrap();
+        let task_manager = manager.clone();
+        let task =
+            tokio::spawn(async move { Client::attach(child, &task_manager.ownership).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if !manager.ownership.children.lock().unwrap().is_empty() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        manager.shutdown();
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_err()
+        );
+    }
+    #[tokio::test]
+    async fn cancelled_thread_creation_unsubscribes_the_late_session() {
+        let ownership = owner();
+        let script = r#"const r=require('node:readline').createInterface({input:process.stdin});let closed=0;r.on('line',line=>{const v=JSON.parse(line);const send=result=>process.stdout.write(JSON.stringify({id:v.id,result})+'\n');if(v.method==='initialize')send({});if(v.method==='thread/start')setTimeout(()=>send({thread:{id:'late-thread'}}),150);if(v.method==='thread/unsubscribe'){closed++;send({});}if(v.method==='probe')send({closed});});"#;
+        let client = Client::attach(fake_command(script).spawn().unwrap(), &ownership)
+            .await
+            .unwrap();
+        tokio::select! {_ = client.request("thread/start",json!({})) => panic!("Synthetic request returned before cancellation"), _ = tokio::time::sleep(Duration::from_millis(25))=>{}}
+        assert!(client.pending.lock().unwrap().is_empty());
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if client.request("probe", json!({})).await.unwrap()["closed"] == 1 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        client.shutdown();
+    }
+    #[tokio::test]
+    async fn server_request_id_cannot_be_mistaken_for_a_client_reply() {
+        let ownership = owner();
+        let script = r#"require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const v=JSON.parse(line);if(v.method==='initialize')process.stdout.write(JSON.stringify({id:v.id,method:'item/commandExecution/requestApproval',params:{}})+'\n');});"#;
+        assert!(
+            Client::attach(fake_command(script).spawn().unwrap(), &ownership)
+                .await
+                .is_err()
+        );
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn closing_the_job_scope_terminates_its_provider() {
+        let scope = crate::process_scope::ProcessScope::new().unwrap();
+        let mut child = fake_command("setInterval(()=>{},1000)").spawn().unwrap();
+        scope.assign(&child).unwrap();
+        drop(scope);
+        tokio::time::timeout(Duration::from_secs(2), child.wait())
+            .await
+            .expect("Provider survived scope close")
+            .unwrap();
+    }
+
     use super::*;
     #[tokio::test]
     #[ignore = "Uses the existing local Codex subscription for one synthetic inference turn"]

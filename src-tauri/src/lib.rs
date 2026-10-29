@@ -1,4 +1,5 @@
 mod codex;
+mod process_scope;
 mod provider;
 
 use pavane_core::{Chat, Message, Run, Store, Workspace};
