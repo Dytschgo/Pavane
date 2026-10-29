@@ -50,7 +50,7 @@ pub struct Run {
     pub model: String,
 }
 
-pub struct Store(Connection);
+pub struct Store(Connection, Option<std::fs::File>);
 
 fn sql(error: rusqlite::Error) -> String {
     // Do not expose SQL text, file paths or user content through native errors.
@@ -88,7 +88,22 @@ fn message_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
-        Self::from_connection(Connection::open(path).map_err(sql)?)
+        // Own the database before crash recovery. A second process must never
+        // mark another live process's responses interrupted.
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path.with_extension("sqlite3.lock"))
+            .map_err(|_| "Unable to open the database lock.".to_string())?;
+        fs2::FileExt::try_lock_exclusive(&lock).map_err(|_| {
+            "This database is already open in another Pavane window. Close that window first."
+                .to_string()
+        })?;
+        let mut store = Self::from_connection(Connection::open(path).map_err(sql)?)?;
+        store.1 = Some(lock);
+        Ok(store)
     }
 
     pub fn memory() -> Result<Self> {
@@ -154,7 +169,7 @@ impl Store {
                 [],
             )
             .map_err(sql)?;
-        Ok(Self(connection))
+        Ok(Self(connection, None))
     }
 
     pub fn create_chat(

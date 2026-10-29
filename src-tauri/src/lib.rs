@@ -253,17 +253,15 @@ async fn run_model(
             .await
             .map_err(|_| "The run queue is unavailable.".to_string())?;
         runtime.with_store(|store| store.update_run(&run, "", "running", now()))?;
-        channel
-            .send(RunEvent {
-                run_id: run.id.clone(),
-                chat_id: run.chat_id.clone(),
-                message_id: run.message_id.clone(),
-                kind: "status".into(),
-                delta: String::new(),
-                status: "running".into(),
-                error: None,
-            })
-            .map_err(|_| "The chat window was closed.".to_string())?;
+        let _ = channel.send(RunEvent {
+            run_id: run.id.clone(),
+            chat_id: run.chat_id.clone(),
+            message_id: run.message_id.clone(),
+            kind: "status".into(),
+            delta: String::new(),
+            status: "running".into(),
+            error: None,
+        });
         provider::stream(
             &runtime.client,
             &run.model[7..],
@@ -276,17 +274,15 @@ async fn run_model(
                 output.push_str(delta);
                 pending.push_str(delta);
                 if last_emit.elapsed().as_millis() >= 40 || pending.len() >= 4096 {
-                    channel
-                        .send(RunEvent {
-                            run_id: run.id.clone(),
-                            chat_id: run.chat_id.clone(),
-                            message_id: run.message_id.clone(),
-                            kind: "delta".into(),
-                            delta: std::mem::take(&mut pending),
-                            status: "running".into(),
-                            error: None,
-                        })
-                        .map_err(|_| "The chat window was closed.".to_string())?;
+                    let _ = channel.send(RunEvent {
+                        run_id: run.id.clone(),
+                        chat_id: run.chat_id.clone(),
+                        message_id: run.message_id.clone(),
+                        kind: "delta".into(),
+                        delta: std::mem::take(&mut pending),
+                        status: "running".into(),
+                        error: None,
+                    });
                     last_emit = std::time::Instant::now();
                 }
                 if last_save.elapsed().as_millis() >= 500 {

@@ -162,6 +162,20 @@ try {
   checks.push("cancel parallel streams and retain partial response");
   await page
     .getByRole("textbox", { name: "Message", exact: true })
+    .fill("STOP_TEST reload during streaming");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await page.getByRole("button", { name: "Stop responses" }).waitFor();
+  await page.reload();
+  await page.getByRole("button", { name: "Stop responses" }).waitFor();
+  await page.getByRole("button", { name: "Stop responses" }).click();
+  await page
+    .getByRole("button", { name: "Stop responses" })
+    .waitFor({ state: "hidden" });
+  checks.push(
+    "in-flight reload reconciles native state and Stop remains usable",
+  );
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
     .fill("Draft survives reload");
   await page
     .getByText("Saving draft…", { exact: true })
@@ -235,6 +249,55 @@ try {
   await page.screenshot({ path: join(evidence, "native-final.png") });
   assert.deepEqual(diagnostics, []);
   checks.push("all six workflow routes, no renderer errors");
+  await page.keyboard.press("Control+k");
+  await page
+    .getByRole("textbox", { name: "Search chat titles", exact: true })
+    .fill("workspace question");
+  await page
+    .getByRole("button", {
+      name: "Open chat A workspace question",
+      exact: true,
+    })
+    .waitFor();
+  await page.getByRole("button", { name: "Close search", exact: true }).click();
+  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
+  await page.setViewportSize({ width: 720, height: 620 });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-narrow.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page
+    .getByRole("button", { name: "Provider connections", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  checks.push(
+    "keyboard search, narrow WebView layout, reduced-motion modal dismissal",
+  );
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
+    .fill("Draft survives process restart");
+  await page
+    .getByText("Saving draft…", { exact: true })
+    .waitFor({ state: "hidden" });
+  await close();
+  page = await launch();
+  assert.equal(
+    await page
+      .getByRole("textbox", { name: "Message", exact: true })
+      .inputValue(),
+    "Draft survives process restart",
+  );
+  await page
+    .getByText("Grüezi 🦀. A persisted response from smoke-a.", { exact: true })
+    .waitFor();
+  checks.push("full native process restart restores SQLite draft and messages");
   await writeFile(
     join(evidence, "native-smoke.json"),
     JSON.stringify(

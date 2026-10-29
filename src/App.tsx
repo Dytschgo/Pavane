@@ -70,6 +70,7 @@ export function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
@@ -98,11 +99,20 @@ export function App() {
   const selection = useRef(0);
   const currentRef = useRef<string | null>(null);
   const draftQueue = useRef<Promise<void>>(Promise.resolve());
+  const draftCache = useRef(
+    new Map<string, { content: string; version: number }>(),
+  );
+  const pendingSaves = useRef(0);
+  const draftVersion = useRef(0);
+  const listVersion = useRef(0);
+  const searchActivated = useRef(false);
   const end = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const nearBottom = useRef(true);
   const liveMessages = useRef(new Map<string, Message>());
-  const current = chats.find((chat) => chat.id === currentId);
+  const current =
+    chats.find((chat) => chat.id === currentId) ??
+    (selectedChat?.id === currentId ? selectedChat : undefined);
   const workspace = workspaces.find((item) => item.id === workspaceId);
   const running = messages.some((message) =>
     ["pending", "running"].includes(message.status),
@@ -113,17 +123,23 @@ export function App() {
     [],
   );
   const refresh = useCallback(async () => {
-    const list = await api.listChats();
+    const version = ++listVersion.current;
+    const list = await api.listChats(0, query);
+    if (version !== listVersion.current) return list;
     setChats(list);
+    setSelectedChat(
+      (previous) => list.find((chat) => chat.id === previous?.id) ?? previous,
+    );
     setHasMoreChats(list.length === 100);
     return list;
-  }, []);
+  }, [query]);
 
   const openChat = useCallback(
     async (chat: Chat) => {
       const version = ++selection.current;
       currentRef.current = chat.id;
       setCurrentId(chat.id);
+      setSelectedChat(chat);
       setWorkspaceId(chat.workspaceId);
       setMessages([]);
       setDraft("");
@@ -146,7 +162,7 @@ export function App() {
           if (!["running", "pending"].includes(message.status))
             liveMessages.current.delete(message.id);
         }
-        setDraft(savedDraft);
+        setDraft(draftCache.current.get(chat.id)?.content ?? savedDraft);
       } catch (failure) {
         if (selection.current === version) report(failure);
       } finally {
@@ -193,6 +209,78 @@ export function App() {
   useEffect(() => {
     if (nearBottom.current) end.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!native || (!searching && !searchActivated.current)) return;
+    searchActivated.current = searching;
+    const timer = window.setTimeout(() => {
+      void refresh().catch(report);
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [searching, refresh, report]);
+
+  useEffect(() => {
+    if (!currentId || !current?.expiresAt) return;
+    const deadline = current.expiresAt;
+    const clearExpired = () => {
+      if (currentRef.current !== currentId || Date.now() < deadline) return;
+      ++selection.current;
+      currentRef.current = null;
+      setCurrentId(null);
+      setSelectedChat(null);
+      setMessages([]);
+      setDraft("");
+      draftCache.current.delete(currentId);
+      for (const [id, message] of liveMessages.current) {
+        if (message.chatId === currentId) liveMessages.current.delete(id);
+      }
+      void refresh().catch(report);
+    };
+    const timer = window.setTimeout(
+      clearExpired,
+      Math.min(Math.max(0, deadline - Date.now()), 2_147_483_647),
+    );
+    const clockCheck = window.setInterval(clearExpired, 1_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(clockCheck);
+    };
+  }, [currentId, current?.expiresAt, refresh, report]);
+
+  useEffect(() => {
+    if (
+      !currentId ||
+      !running ||
+      messages.some(
+        (message) =>
+          ["pending", "running"].includes(message.status) &&
+          liveMessages.current.has(message.id),
+      )
+    )
+      return;
+    const target = currentId;
+    let pending = false;
+    const timer = window.setInterval(() => {
+      if (pending) return;
+      pending = true;
+      void api
+        .messages(target)
+        .then((page) => {
+          if (currentRef.current !== target) return;
+          setMessages((previous) => {
+            const latest = new Map(
+              page.items.map((message) => [message.id, message]),
+            );
+            return previous.map((message) => latest.get(message.id) ?? message);
+          });
+        })
+        .catch(report)
+        .finally(() => {
+          pending = false;
+        });
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [currentId, running, messages, report]);
 
   useEffect(() => {
     if (!native) return;
@@ -264,10 +352,20 @@ export function App() {
     if (!currentId) return;
     setSaving(true);
     const chatId = currentId;
+    const version = ++draftVersion.current;
+    draftCache.current.set(chatId, { content: value, version });
+    pendingSaves.current++;
     draftQueue.current = draftQueue.current
       .then(() => api.saveDraft(chatId, value))
+      .then(() => {
+        if (draftCache.current.get(chatId)?.version === version)
+          draftCache.current.delete(chatId);
+      })
       .catch(report)
-      .finally(() => setSaving(false));
+      .finally(() => {
+        pendingSaves.current--;
+        setSaving(pendingSaves.current > 0);
+      });
   }
 
   async function connect() {
@@ -313,6 +411,7 @@ export function App() {
         chatId = chat.id;
         currentRef.current = chatId;
         setCurrentId(chatId);
+        setSelectedChat(chat);
         setChats((previous) => [chat, ...previous]);
       }
       const target = chatId;
@@ -345,6 +444,7 @@ export function App() {
         }
       };
       const started = await api.send(target, content, selectedModels, receive);
+      draftCache.current.delete(target);
       const placeholders: Message[] = started.runs.map((run, index) => ({
         id: run.messageId,
         chatId: target,
@@ -412,7 +512,7 @@ export function App() {
 
   async function moreChats() {
     try {
-      const list = await api.listChats(chats.length);
+      const list = await api.listChats(chats.length, query);
       setChats((previous) => [...previous, ...list]);
       setHasMoreChats(list.length === 100);
     } catch (failure) {
@@ -448,6 +548,19 @@ export function App() {
   function navigate(next: View) {
     setView(next);
     setWorkspaceId(null);
+  }
+
+  async function keepChat(id: string) {
+    await api.keep(id);
+    setSelectedChat((previous) =>
+      previous?.id === id ? { ...previous, expiresAt: null } : previous,
+    );
+    setChats((previous) =>
+      previous.map((chat) =>
+        chat.id === id ? { ...chat, expiresAt: null } : chat,
+      ),
+    );
+    await refresh();
   }
 
   async function openWorkspace(item: Workspace) {
@@ -519,7 +632,7 @@ export function App() {
                 <Menu.Item
                   className="menu-item"
                   onSelect={() => {
-                    void api.keep(chat.id).then(refresh).catch(report);
+                    void keepChat(chat.id).catch(report);
                   }}
                 >
                   <ShieldCheck size={14} />
@@ -968,7 +1081,7 @@ export function App() {
                     <span>Saved for 30 days from creation.</span>
                     <button
                       onClick={() => {
-                        void api.keep(current.id).then(refresh).catch(report);
+                        void keepChat(current.id).catch(report);
                       }}
                     >
                       Keep this chat
@@ -1081,9 +1194,11 @@ export function App() {
                   <span>
                     {saving
                       ? "Saving draft…"
-                      : native
-                        ? "Saved on this device"
-                        : "Desktop preview"}
+                      : currentId && draftCache.current.has(currentId)
+                        ? "Draft not saved"
+                        : native
+                          ? "Saved on this device"
+                          : "Desktop preview"}
                   </span>
                   <span>
                     Enter to send <span className="footer-dot">·</span> Shift +

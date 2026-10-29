@@ -2,6 +2,34 @@ use pavane_core::{DELETE_SOON_MS, Store};
 const NOW: i64 = 1_800_000_000_000;
 
 #[test]
+fn second_open_cannot_interrupt_a_live_owner() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("pavane.sqlite3");
+    let mut first = Store::open(&path).unwrap();
+    let chat = first.create_chat(false, None, NOW).unwrap();
+    let (_, runs) = first
+        .begin_turn(&chat.id, "hello", &["model".into()], NOW)
+        .unwrap();
+    first
+        .update_run(&runs[0], "in progress", "running", NOW)
+        .unwrap();
+    assert!(Store::open(&path).is_err());
+    assert_eq!(
+        first.messages(&chat.id, None, NOW).unwrap()[1].status,
+        "running"
+    );
+    first
+        .update_run(&runs[0], "finished", "complete", NOW)
+        .unwrap();
+    drop(first);
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(
+        reopened.messages(&chat.id, None, NOW).unwrap()[1].status,
+        "complete"
+    );
+}
+
+#[test]
 fn chats_drafts_and_messages_survive_reopen() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("pavane.sqlite3");
