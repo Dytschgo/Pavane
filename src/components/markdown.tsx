@@ -1,11 +1,13 @@
 import { memo, useDeferredValue, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, ImageOff, Link2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
 import { api } from "../lib/api";
+import { useCopyFeedback } from "../lib/use-copy-feedback";
 
 function textOf(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -15,7 +17,7 @@ function textOf(node: ReactNode): string {
   return "";
 }
 function CodeBlock({ children }: ComponentProps<"pre">) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback(textOf(children).replace(/\n$/, ""));
   const element = Array.isArray(children) ? children[0] : children;
   const language =
     element && typeof element === "object" && "props" in element
@@ -31,12 +33,7 @@ function CodeBlock({ children }: ComponentProps<"pre">) {
           variant="ghost"
           size="small"
           aria-label="Copy code"
-          onClick={() => {
-            void navigator.clipboard
-              .writeText(textOf(children).replace(/\n$/, ""))
-              .then(() => setCopied(true))
-              .catch(() => setCopied(false));
-          }}
+          onClick={() => void copy()}
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
           <span>{copied ? "Copied" : "Copy"}</span>
@@ -47,8 +44,9 @@ function CodeBlock({ children }: ComponentProps<"pre">) {
   );
 }
 function SafeLink({ href, children }: ComponentProps<"a">) {
-  const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const { copied, copy } = useCopyFeedback(href ?? "");
+  const [failedHref, setFailedHref] = useState<string | null>(null);
+  const failed = failedHref === href;
   if (!href || !/^https?:\/\//i.test(href)) return <span>{children}</span>;
   return (
     <Tip
@@ -64,12 +62,8 @@ function SafeLink({ href, children }: ComponentProps<"a">) {
         href={href}
         onClick={(event) => {
           event.preventDefault();
-          if (failed)
-            void navigator.clipboard
-              .writeText(href)
-              .then(() => setCopied(true))
-              .catch(() => setCopied(false));
-          else void api.openExternal(href).catch(() => setFailed(true));
+          if (failed) void copy();
+          else void api.openExternal(href).catch(() => setFailedHref(href));
         }}
       >
         {children}
@@ -79,6 +73,29 @@ function SafeLink({ href, children }: ComponentProps<"a">) {
   );
 }
 
+function BlockedImage({ alt }: ComponentProps<"img">) {
+  return (
+    <span className="blocked-image">
+      <ImageOff size={14} />
+      {alt || "Image"}
+    </span>
+  );
+}
+function MarkdownTable({ children }: ComponentProps<"table">) {
+  return (
+    <div className="table-scroll">
+      <table>{children}</table>
+    </div>
+  );
+}
+const components: Components = {
+  pre: CodeBlock,
+  a: SafeLink,
+  img: BlockedImage,
+  table: MarkdownTable,
+};
+const plugins = [remarkGfm];
+
 export const Markdown = memo(function Markdown({
   content,
 }: {
@@ -87,25 +104,7 @@ export const Markdown = memo(function Markdown({
   const deferred = useDeferredValue(content);
   return (
     <div className="markdown">
-      <ReactMarkdown
-        skipHtml
-        remarkPlugins={[remarkGfm]}
-        components={{
-          pre: CodeBlock,
-          a: SafeLink,
-          img: ({ alt }) => (
-            <span className="blocked-image">
-              <ImageOff size={14} />
-              {alt || "Image"}
-            </span>
-          ),
-          table: ({ children }) => (
-            <div className="table-scroll">
-              <table>{children}</table>
-            </div>
-          ),
-        }}
-      >
+      <ReactMarkdown skipHtml remarkPlugins={plugins} components={components}>
         {deferred}
       </ReactMarkdown>
     </div>

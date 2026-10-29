@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useState } from "react";
+import { lazy, memo, Suspense } from "react";
 import {
   AudioLines,
   Check,
@@ -9,6 +9,7 @@ import {
 import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
+import { useCopyFeedback } from "../lib/use-copy-feedback";
 
 const Markdown = lazy(() =>
   import("./markdown").then((module) => ({ default: module.Markdown })),
@@ -23,7 +24,7 @@ export const ChatMessage = memo(function ChatMessage({
   models: Model[];
   onError: (error: unknown) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyFeedback(message.content, onError);
   const model = models.find((model) => model.id === message.model);
   const provider =
     model?.provider ??
@@ -96,15 +97,7 @@ export const ChatMessage = memo(function ChatMessage({
             size="icon"
             className="copy-message"
             aria-label="Copy message"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(message.content)
-                .then(() => {
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1500);
-                })
-                .catch(onError);
-            }}
+            onClick={() => void copy()}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </Button>

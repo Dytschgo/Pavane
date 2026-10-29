@@ -49,6 +49,7 @@ import { ModelPicker } from "./components/model-picker";
 import { Providers } from "./components/providers";
 import { ChatMessage } from "./components/chat-message";
 import { useModelPreferences } from "./lib/model-preferences";
+import { resolveModelOptions } from "./lib/model-options";
 
 const views: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
@@ -126,6 +127,16 @@ export function App() {
     (failure: unknown) => setError(errorText(failure)),
     [],
   );
+  const focusComposer = useCallback((chatId?: string) => {
+    if (chatId && currentRef.current !== chatId) return;
+    const active = document.activeElement;
+    if (
+      active === document.body ||
+      active === composer.current ||
+      active?.closest(".composer")
+    )
+      composer.current?.focus();
+  }, []);
   const refresh = useCallback(async () => {
     const version = ++listVersion.current;
     const list = await api.listChats(0, query);
@@ -441,6 +452,16 @@ export function App() {
 
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        pickerOpen ||
+        settings ||
+        searching ||
+        deleteId ||
+        renameId ||
+        createKind
+      )
+        return;
       if ((event.ctrlKey || event.metaKey) && /^[1-9]$/.test(event.key)) {
         const id = preferences.favourites[Number(event.key) - 1];
         if (id && models.some((model) => model.id === id)) {
@@ -450,12 +471,24 @@ export function App() {
             selected: [id],
             compare: false,
           }));
+          focusComposer();
         }
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [preferences.favourites, models, updatePreferences]);
+  }, [
+    preferences.favourites,
+    models,
+    updatePreferences,
+    focusComposer,
+    pickerOpen,
+    settings,
+    searching,
+    deleteId,
+    renameId,
+    createKind,
+  ]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -468,6 +501,17 @@ export function App() {
       return;
     }
     const content = draft;
+    const originTitle =
+      current?.title && current.title !== "New chat"
+        ? current.title
+        : content.trim().replace(/\s+/gu, " ").slice(0, 72);
+    let submittedChatId = currentId;
+    const reportSendError = (failure: unknown, modelId?: string) => {
+      const name = models.find((model) => model.id === modelId)?.name;
+      report(
+        `In “${originTitle}”${name ? ` · ${name}` : ""}: ${errorText(failure)}`,
+      );
+    };
     setBusy(true);
     setError(null);
     try {
@@ -482,6 +526,7 @@ export function App() {
         setChats((previous) => [chat, ...previous]);
       }
       const target = chatId;
+      submittedChatId = target;
       let ready = false;
       const buffered: RunEvent[] = [];
       const receive = (update: RunEvent) => {
@@ -506,7 +551,7 @@ export function App() {
           setMessages((previous) => applyRunEvent(previous, update));
         if (update.kind === "finished") {
           if (update.error && update.status !== "cancelled")
-            report(update.error);
+            reportSendError(update.error, existing?.model ?? undefined);
           void refresh().catch(report);
         }
       };
@@ -518,24 +563,7 @@ export function App() {
         Object.fromEntries(
           selectedModels.map((id) => {
             const model = models.find((model) => model.id === id)!;
-            const saved = preferences.options[id];
-            return [
-              id,
-              {
-                reasoningEffort:
-                  saved?.reasoningEffort &&
-                  model.reasoningEfforts?.includes(saved.reasoningEffort)
-                    ? saved.reasoningEffort
-                    : (model.defaultReasoningEffort ?? null),
-                serviceTier:
-                  saved?.serviceTier &&
-                  model.serviceTiers?.some(
-                    (tier) => tier.id === saved.serviceTier,
-                  )
-                    ? saved.serviceTier
-                    : "default",
-              },
-            ];
+            return [id, resolveModelOptions(model, preferences.options[id])];
           }),
         ),
       );
@@ -577,15 +605,18 @@ export function App() {
           update.error &&
           update.status !== "cancelled"
         )
-          report(update.error);
+          reportSendError(
+            update.error,
+            liveMessages.current.get(update.messageId)?.model ?? undefined,
+          );
       }
       nearBottom.current = true;
       await refresh();
     } catch (failure) {
-      report(failure);
+      reportSendError(failure);
     } finally {
       setBusy(false);
-      requestAnimationFrame(() => composer.current?.focus());
+      requestAnimationFrame(() => focusComposer(submittedChatId ?? undefined));
     }
   }
 
@@ -1163,6 +1194,7 @@ export function App() {
                         connecting={connecting}
                         onRefresh={() => void connect()}
                         onConnect={() => setSettings(true)}
+                        onSelected={() => focusComposer(currentId ?? undefined)}
                       />
                       {running ? (
                         <Button

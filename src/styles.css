@@ -1554,6 +1554,18 @@ p {
   border-inline-start: 1px solid var(--border-strong);
   padding-inline-start: 7px;
 }
+.model-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.picker-shortcut {
+  flex: none;
+  font: 10px var(--font-mono);
+  color: var(--subtle-foreground);
+  padding-inline: 4px;
+  white-space: nowrap;
+}
 .connection-intro {
   display: flex;
   align-items: center;

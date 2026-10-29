@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import type { Chat } from "./lib/types";
+import type { Chat, RunEvent, TurnStarted } from "./lib/types";
 
 const mocked = vi.hoisted(() => ({
   listChats: vi.fn(),
@@ -40,6 +40,42 @@ const first: Chat = {
   workspaceId: null,
 };
 const second: Chat = { ...first, id: "second", title: "Second conversation" };
+const sentTurn: TurnStarted = {
+  user: {
+    id: "sent-user",
+    chatId: first.id,
+    role: "user",
+    content: "Hello",
+    model: null,
+    status: "complete",
+    createdAt: 1,
+    sequence: 1,
+  },
+  runs: [
+    {
+      id: "sent-run",
+      chatId: first.id,
+      messageId: "sent-reply",
+      model: "codex:sol",
+    },
+  ],
+};
+function connectSol() {
+  mocked.catalog.mockResolvedValue({
+    models: [
+      {
+        id: "codex:sol",
+        name: "Sol",
+        provider: "Codex",
+        isDefault: true,
+        reasoningEfforts: ["low", "high"],
+        defaultReasoningEffort: "low",
+        serviceTiers: [],
+      },
+    ],
+    providers: [],
+  });
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -133,6 +169,85 @@ it("reuses a pristine current chat instead of accumulating empty conversations",
   fireEvent.click(screen.getByRole("button", { name: "New chat" }));
   expect(mocked.createChat).not.toHaveBeenCalled();
   expect(input).toHaveFocus();
+});
+
+it("does not steal search focus when a pending send finishes", async () => {
+  connectSol();
+  let finishSend: (turn: TurnStarted) => void = () => {
+    throw new Error("Send was not started");
+  };
+  mocked.send.mockImplementation(
+    () =>
+      new Promise<TurnStarted>((resolve) => {
+        finishSend = resolve;
+      }),
+  );
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const input = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.change(input, { target: { value: "Hello" } });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await waitFor(() => expect(mocked.send).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Search chats" }));
+  const search = await screen.findByRole("textbox", {
+    name: "Search chat titles",
+  });
+  search.focus();
+  await act(async () => finishSend({ ...sentTurn, runs: [] }));
+  await waitFor(() => expect(input).toBeEnabled());
+  await act(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  expect(search).toHaveFocus();
+});
+
+it("identifies the originating chat when its response fails after navigation", async () => {
+  connectSol();
+  let receive: (event: RunEvent) => void = () => {
+    throw new Error("Run callback was not registered");
+  };
+  mocked.send.mockImplementation(
+    (
+      _id: string,
+      _text: string,
+      _models: string[],
+      onEvent: (event: RunEvent) => void,
+    ) => {
+      receive = onEvent;
+      return Promise.resolve(sentTurn);
+    },
+  );
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const input = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.change(input, { target: { value: "Hello" } });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await screen.findByRole("button", { name: "Stop responses" });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Open chat Second conversation" }),
+  );
+  await waitFor(() =>
+    expect(mocked.messages).toHaveBeenLastCalledWith(second.id),
+  );
+  await act(async () =>
+    receive({
+      runId: "sent-run",
+      chatId: first.id,
+      messageId: "sent-reply",
+      kind: "finished",
+      delta: "",
+      status: "failed",
+      error: "Synthetic disconnect",
+    }),
+  );
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("First conversation");
+  expect(alert).toHaveTextContent("Sol");
+  expect(alert).toHaveTextContent("Synthetic disconnect");
+  expect(alert).not.toHaveTextContent("Second conversation");
 });
 
 describe("durable draft interaction", () => {

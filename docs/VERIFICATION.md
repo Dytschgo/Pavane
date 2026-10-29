@@ -1,5 +1,7 @@
 # Foundation verification — 29 October 2026
 
+This is a chronological evidence record. Earlier results apply only to their recorded revision; the latest checkpoint is at the end.
+
 Runtime candidate: `7048c9195a976ed045dd2202f82d11483c418307`. Later changes strengthen the deferred-read regression and document evidence; they do not change runtime behavior. Base: `46aaf8493dba4e8bc0f5f40ef5e46abfcef488c8`. Environment: Windows x64, PowerShell 7.6.9, Rust 1.95.0, Node 24.18.0 and pnpm 10.34.5.
 
 ## Executed checks
@@ -48,3 +50,17 @@ Three independent native review passes found startup ownership, bounded-write/re
 After the lab-only instruction, no further local app tests/builds were run. Formatters updated source, and `git diff --check` found no whitespace errors. The focused/multiline screenshots and geometry/draft-preservation regressions are prepared in the native fixture; **they have not yet been produced for this candidate**. Final format/lint/types/tests, native visual/interaction checks, live Codex cancellation/containment and the optimized executable remain pending on the lab. See [the lab gate and exact plan](LAB-VERIFICATION.md).
 
 The existing `target/release/pavane.exe` remains the old foundation build. Do not tell the user it contains the new Codex/chat changes. No final RAM/startup measurement exists for this candidate, and no updated binary has been launched or published. License remains deferred; PR #1 remains unmerged.
+
+## Windows CI and failed lab attempt — d2917ee
+
+GitHub Windows CI passed on `d2917eedf057067e7d3688a5eddc30916dc76c6e`, run `40957427918`, job `123741024047`, completed 2026-10-29T21:32:41Z. It covers formatting, lint, TypeScript, renderer tests, Rust formatting/clippy/tests and the optimized Windows build. It does not establish native UI, live subscription cancellation or Windows descendant-cleanup acceptance.
+
+The one lab attempt for that head failed in retained-runner host source hashing (`Get-FileHash` unavailable), exit 1. Recorded run `windows-test/20261029T221740Z-00bce28e941c` has no Pavane verifier report or screenshots. Its managed job remains unknown with cleanupConfirmed=false. LabManager's subsequently installed 2.4.1 launch fix and root's successful read-only MCP checks do not reconcile that historical job. See [the exact lab gate](LAB-VERIFICATION.md); no retry/release is authorized from these observations.
+
+## Chat interaction pass — PV-CHAT-UX-003
+
+Source changes address stale picker search/highlight state, keyboard navigation scrolling, provider-scoped search, IME-safe selection, favourite shortcuts and supported model-option fallback shared by display/submission. Active non-default service tier is visible on the trigger. No provider, schema or credential boundary changed.
+
+An independent read-only source review identified four adjacent defects: streaming table wrappers remounted, code copy feedback outlived its snapshot, asynchronous send completion could steal search focus, and background errors lacked the originating chat. Source fixes keep Markdown component identity stable, share bounded clipboard feedback, respect current focus/chat ownership, and label errors with their chat/model. Added regressions exercise these behaviors and picker flows. They are not claimed as passed before CI execution.
+
+At this checkpoint only source formatting and `git diff --check` ran on the coding PC. Renderer tests, lint/types and the build for this pass await Windows CI. Native visual/interaction and final live Codex checks remain blocked by supported reconciliation. No current screenshot, RAM measurement or executable acceptance is claimed. The changes form one coherent chat workflow pass, with most additions devoted to behavioral regressions. Reverting the commit restores prior interaction behavior without a SQLite migration.

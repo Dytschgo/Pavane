@@ -13,11 +13,13 @@ import {
   ShieldCheck,
   SquareTerminal,
   Star,
+  Zap,
 } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Model } from "../lib/types";
 import { effortLabel } from "../lib/model-preferences";
 import type { Preferences } from "../lib/model-preferences";
+import { resolveModelOptions } from "../lib/model-options";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
 
@@ -30,6 +32,7 @@ interface Props {
   connecting: boolean;
   onRefresh: () => void;
   onConnect: () => void;
+  onSelected?: () => void;
 }
 export function ModelPicker({
   models,
@@ -40,29 +43,51 @@ export function ModelPicker({
   connecting,
   onRefresh,
   onConnect,
+  onSelected,
 }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState<string | null>(
+    preferences.selected[0] ?? null,
+  );
   const [details, setDetails] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
   const keyboardDetails = useRef(false);
+  const picked = useRef(false);
+  const activeOption = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = models.find((model) => model.id === preferences.selected[0]);
-  const effort = selected
-    ? (preferences.options[selected.id]?.reasoningEffort ??
-      selected.defaultReasoningEffort)
+  const resolved = selected
+    ? resolveModelOptions(selected, preferences.options[selected.id])
     : null;
-  const visible = models.filter((model) =>
-    query
-      ? model.name.toLowerCase().includes(query.toLowerCase())
-      : filter === "all" ||
-        (filter === "favourites" &&
-          preferences.favourites.includes(model.id)) ||
-        model.provider.toLowerCase() === filter,
+  const effort = resolved?.reasoningEffort;
+  const tier = selected?.serviceTiers?.find(
+    (tier) => tier.id === resolved?.serviceTier,
   );
-  const index = Math.min(active, Math.max(visible.length - 1, 0));
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean);
+  const visible = models.filter((model) => {
+    const inProvider =
+      filter === "all" ||
+      (filter === "favourites" && preferences.favourites.includes(model.id)) ||
+      model.provider.toLowerCase() === filter;
+    const text =
+      `${model.name} ${model.provider} ${model.id}`.toLocaleLowerCase();
+    return inProvider && terms.every((term) => text.includes(term));
+  });
+  if (filter === "favourites")
+    visible.sort(
+      (a, b) =>
+        preferences.favourites.indexOf(a.id) -
+        preferences.favourites.indexOf(b.id),
+    );
+  const index = Math.max(
+    0,
+    visible.findIndex((model) => model.id === active),
+  );
   const current = visible[index];
+  useEffect(() => {
+    if (open) activeOption.current?.scrollIntoView({ block: "nearest" });
+  }, [open, current?.id, index]);
   const providerIds = [
     ...new Set(models.map((model) => model.provider.toLowerCase())),
   ];
@@ -83,19 +108,24 @@ export function ModelPicker({
         : [...previous.favourites, id].slice(0, 32),
     }));
   }
-  function choose(model: Model) {
+  function finishSelection() {
+    picked.current = true;
+    setQuery("");
+    setDetails(null);
+    onOpenChange(false);
+  }
+  function choose(model: Model, single = false) {
     update((previous) => ({
       ...previous,
-      selected: previous.compare
-        ? previous.selected.includes(model.id)
-          ? previous.selected.filter((id) => id !== model.id)
-          : [...previous.selected, model.id].slice(0, 4)
-        : [model.id],
+      compare: single ? false : previous.compare,
+      selected:
+        previous.compare && !single
+          ? previous.selected.includes(model.id)
+            ? previous.selected.filter((id) => id !== model.id)
+            : [...previous.selected, model.id].slice(0, 4)
+          : [model.id],
     }));
-    if (!preferences.compare) {
-      setDetails(null);
-      onOpenChange(false);
-    }
+    if (!preferences.compare || single) finishSelection();
   }
   function setting(model: Model, effort?: string, tier?: string) {
     update((previous) => ({
@@ -105,25 +135,22 @@ export function ModelPicker({
         : [model.id],
       options: {
         ...previous.options,
-        [model.id]: {
-          reasoningEffort:
-            effort ??
-            previous.options[model.id]?.reasoningEffort ??
-            model.defaultReasoningEffort ??
-            null,
-          serviceTier:
-            tier ?? previous.options[model.id]?.serviceTier ?? "default",
-        },
+        [model.id]: resolveModelOptions(model, {
+          ...resolveModelOptions(model, previous.options[model.id]),
+          ...(effort ? { reasoningEffort: effort } : {}),
+          ...(tier ? { serviceTier: tier } : {}),
+        }),
       },
     }));
     setDetails(null);
-    if (!preferences.compare) onOpenChange(false);
+    if (!preferences.compare) finishSelection();
   }
   const TriggerIcon = selected?.provider === "Codex" ? SquareTerminal : Cpu;
   return (
     <Popover.Root
       open={open}
       onOpenChange={(value) => {
+        picked.current = false;
         onOpenChange(value);
         if (!value) {
           setQuery("");
@@ -136,7 +163,7 @@ export function ModelPicker({
           variant="ghost"
           size="small"
           className="model-trigger"
-          aria-label={`Model: ${selected?.name ?? "Choose model"}${effort ? `, ${effortLabel(effort)}` : ""}. Change model`}
+          aria-label={`Model: ${selected?.name ?? "Choose model"}${effort ? `, ${effortLabel(effort)}` : ""}${tier ? `, ${tier.name}` : ""}. Change model`}
         >
           <TriggerIcon size={15} />
           <span>
@@ -150,6 +177,12 @@ export function ModelPicker({
           {effort && preferences.selected.length === 1 && (
             <small>{effortLabel(effort)}</small>
           )}
+          {tier && preferences.selected.length === 1 && (
+            <small className="model-tier" title={tier.description || tier.name}>
+              <Zap size={12} />
+              {tier.name}
+            </small>
+          )}
           <ChevronDown size={12} />
         </Button>
       </Popover.Trigger>
@@ -161,7 +194,34 @@ export function ModelPicker({
           sideOffset={12}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
+            picked.current = false;
+            setQuery("");
+            setFilter("all");
+            setActive(preferences.selected[0] ?? null);
             search.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            if (picked.current && onSelected) {
+              event.preventDefault();
+              onSelected();
+            }
+          }}
+          onKeyDown={(event) => {
+            if (
+              !event.nativeEvent.isComposing &&
+              (event.ctrlKey || event.metaKey) &&
+              /^[1-9]$/.test(event.key)
+            ) {
+              const model = models.find(
+                (model) =>
+                  model.id === preferences.favourites[Number(event.key) - 1],
+              );
+              if (model) {
+                event.preventDefault();
+                event.stopPropagation();
+                choose(model, true);
+              }
+            }
           }}
           onEscapeKeyDown={(event) => {
             if (details) {
@@ -175,13 +235,13 @@ export function ModelPicker({
             {rails.map(({ id, label, icon: Icon }) => (
               <Tip key={id} label={label}>
                 <button
-                  className={`picker-rail-button ${filter === id && !query ? "active" : ""}`}
+                  className={`picker-rail-button ${filter === id ? "active" : ""}`}
                   aria-label={label}
-                  aria-pressed={filter === id && !query}
+                  aria-pressed={filter === id}
                   onClick={() => {
                     setFilter(id);
                     setQuery("");
-                    setActive(0);
+                    setActive(null);
                     search.current?.focus();
                   }}
                 >
@@ -213,21 +273,22 @@ export function ModelPicker({
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
-                  setActive(0);
+                  setActive(null);
                   setDetails(null);
                 }}
                 onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                     event.preventDefault();
-                    setActive((value) =>
-                      Math.max(
-                        0,
-                        Math.min(
-                          visible.length - 1,
-                          value + (event.key === "ArrowDown" ? 1 : -1),
-                        ),
+                    const next = Math.max(
+                      0,
+                      Math.min(
+                        visible.length - 1,
+                        index + (event.key === "ArrowDown" ? 1 : -1),
                       ),
                     );
+                    setActive(visible[next]?.id ?? null);
+                    setDetails(null);
                   }
                   if (event.key === "Enter" && current) {
                     event.preventDefault();
@@ -235,6 +296,14 @@ export function ModelPicker({
                   }
                   if (
                     event.key === "ArrowRight" &&
+                    !event.shiftKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.altKey &&
+                    event.currentTarget.selectionStart ===
+                      event.currentTarget.value.length &&
+                    event.currentTarget.selectionEnd ===
+                      event.currentTarget.value.length &&
                     current &&
                     (current.reasoningEfforts?.length ||
                       current.serviceTiers?.length)
@@ -297,7 +366,20 @@ export function ModelPicker({
                           ? "No matching models"
                           : "No models connected yet"}
                       </p>
-                      <button onClick={onConnect}>Open connections</button>
+                      {models.length ? (
+                        <button
+                          onClick={() => {
+                            setQuery("");
+                            setFilter("all");
+                            setActive(preferences.selected[0] ?? null);
+                            search.current?.focus();
+                          }}
+                        >
+                          Clear filters
+                        </button>
+                      ) : (
+                        <button onClick={onConnect}>Open connections</button>
+                      )}
                     </>
                   )}
                 </div>
@@ -306,11 +388,13 @@ export function ModelPicker({
                 const Icon = model.provider === "Codex" ? SquareTerminal : Cpu;
                 const chosen = preferences.selected.includes(model.id);
                 const starred = preferences.favourites.includes(model.id);
-                const selectedEffort =
-                  preferences.options[model.id]?.reasoningEffort ??
-                  model.defaultReasoningEffort;
-                const selectedTier =
-                  preferences.options[model.id]?.serviceTier ?? "default";
+                const options = resolveModelOptions(
+                  model,
+                  preferences.options[model.id],
+                );
+                const selectedEffort = options.reasoningEffort;
+                const selectedTier = options.serviceTier;
+                const shortcut = preferences.favourites.indexOf(model.id) + 1;
                 return (
                   <Popover.Root
                     key={model.id}
@@ -322,12 +406,18 @@ export function ModelPicker({
                     <Popover.Anchor asChild>
                       <div
                         className={`picker-row ${index === row ? "highlighted" : ""}`}
-                        onPointerEnter={() => setActive(row)}
+                        onPointerMove={() => setActive(model.id)}
                       >
                         <div
                           role="option"
+                          ref={index === row ? activeOption : undefined}
                           tabIndex={-1}
                           aria-selected={chosen}
+                          aria-keyshortcuts={
+                            shortcut > 0 && shortcut < 10
+                              ? `Control+${shortcut}`
+                              : undefined
+                          }
                           id={`${listId}-${row}`}
                           className="picker-option"
                           onClick={() => choose(model)}
@@ -342,6 +432,11 @@ export function ModelPicker({
                                 : ""}
                             </small>
                           </span>
+                          {shortcut > 0 && shortcut < 10 && (
+                            <kbd className="picker-shortcut" aria-hidden="true">
+                              Ctrl+{shortcut}
+                            </kbd>
+                          )}
                           {chosen && <Check size={14} />}
                         </div>
                         <button

@@ -1,4 +1,16 @@
-# Current handoff
+# Current handoff — 30 October 2026
+
+Current work is `PV-CHAT-UX-003`, on `feat/desktop-foundation` in `D:/Code/Pavane-desktop`. Draft [PR #1](https://github.com/Dytschgo/Pavane/pull/1) targets `develop` and remains unmerged. Preserve the retired dirty `D:/Code/Pavane` checkout. Licensing is explicitly deferred. Older sections below are chronological history, not the current lab state.
+
+Previous head `d2917eedf057067e7d3688a5eddc30916dc76c6e` passed Windows CI: format/lint/types, renderer and Rust tests, clippy and optimized Windows build. The next source candidate improves model-picker keyboard selection, search/scrolling, shared option fallback, visible fast tier, streaming table/copy state, focus ownership and background error context. Meaningful renderer regressions were added; execution is pending Windows CI at this checkpoint. No schema or native provider/process boundary changed. This is one coherent chat interaction pass with most additions devoted to regression coverage.
+
+All further app tests/builds/rendering must use the lab Windows PC through LabManager. Exactly one Pavane submission occurred for `d2917ee`: job `job-59771bccefd44954acd14bec31d824ce`, reservation `reservation-dd0dcab1bfce448a9f81e2f4288c5655`, recorded run `windows-test/20261029T221740Z-00bce28e941c`. Host source hashing failed (`Get-FileHash` unavailable), exit 1, unknown/cleanupConfirmed=false. The reservation remains reconciling. No Pavane verifier report or screenshots were produced. Preserve that immutable attempt, its DPAPI token and durable single-submission guard outside the source tree; never infer cleanup from the apparent early failure.
+
+Installed LabManager 2.4.1 is at `C:/Users/DylanFerraro/agent-tools/lab-manager/releases/20261029-234837/lab-manager.exe`. Its launch fix passed isolated guest tests. Root verified its hash and MCP initialize/status/preflight read-only at 2026-10-29T22:52:08Z. Policy/source/deadline passed; historical cleanup still correctly blocked readiness. No Pavane retry/release/cancel was performed. The [LabManager project thread](t3-thread://v2/950f5165-f55d-4ffd-9b15-4b87e10b4d15/mcp:launch:49276477c271f9626d2377602436727a444f6648708260d263d620113c4182cd) is implementing native operator reconciliation with independent review. Any missing maintenance exception or actual operator attestation remains explicit; root must not manufacture cleanup evidence.
+
+Next: finish/push the source pass and use Windows CI for its checks. After supported recovery, preflight an explicitly identified new candidate and verify it in one owned native invocation. No coding-PC app execution, direct runner bypass, merge, current executable acceptance or final Codex/native screenshot claim. Existing local `target/release/pavane.exe` is the older foundation. See [verification](../VERIFICATION.md), [current plan](../plans/NOW.md) and [exact lab gate](../LAB-VERIFICATION.md).
+
+## Historical checkpoints
 
 ## Desktop foundation — 29 October 2026
 
