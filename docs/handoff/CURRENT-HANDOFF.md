@@ -11,3 +11,7 @@ Implemented foundation: Tauri 2 Windows shell, Rust SQLite core, normal/30-day c
 Current verification: seven renderer tests, nine storage/recovery tests and two native decoder tests pass, as do formatting, lint, types, clippy, the optimized executable build, targeted native smoke and bundled release launch. Two independent review rounds found and resolved persistence/reload/expiry defects; the final regression forces the deferred-read timing. See [verification](../VERIFICATION.md) for revisions, evidence, the first memory sample and limitations. No merge, published release, paid inference, hosting or production infrastructure change has occurred.
 
 Next work: subscription/provider integration and memory profiling. The full WebView process-tree footprint has been measured once and must not be described as optimized or proven low-RAM. License remains deferred. The first source PR is prepared against develop; its link/status will be recorded below.
+
+## Reviewable PR
+
+[PR #1](https://github.com/Dytschgo/Pavane/pull/1) targets develop and remains open/unmerged. Local validation and both independent review dispositions are recorded in VERIFICATION.md. Windows GitHub CI is pending separately. The standalone executable is target/release/pavane.exe; no installer or release was published.
