@@ -1,3 +1,4 @@
+mod codex;
 mod provider;
 
 use pavane_core::{Chat, Message, Run, Store, Workspace};
@@ -23,6 +24,7 @@ struct Runtime {
     active: Mutex<HashMap<String, (String, CancellationToken)>>,
     slots: Arc<Semaphore>,
     client: reqwest::Client,
+    codex: codex::Manager,
 }
 
 impl Runtime {
@@ -179,21 +181,83 @@ async fn discover_models(runtime: State<'_, Arc<Runtime>>) -> Result<Vec<provide
     provider::discover(&runtime.client).await
 }
 
+#[derive(Serialize)]
+struct Catalog {
+    models: Vec<provider::Model>,
+    providers: Vec<codex::Status>,
+}
+
+#[tauri::command]
+async fn discover_providers(runtime: State<'_, Arc<Runtime>>) -> Result<Catalog, String> {
+    let (codex, ollama) =
+        tokio::join!(runtime.codex.catalog(), provider::discover(&runtime.client));
+    let mut models = Vec::new();
+    let mut providers = Vec::new();
+    match codex {
+        Ok((available, status)) => {
+            models.extend(available);
+            providers.push(status);
+        }
+        Err(error) => providers.push(codex::Status {
+            id: "codex".into(),
+            name: "Codex".into(),
+            state: "unavailable".into(),
+            detail: error,
+            limits: vec![],
+        }),
+    }
+    match ollama {
+        Ok(available) => {
+            providers.push(codex::Status {
+                id: "ollama".into(),
+                name: "Ollama".into(),
+                state: "connected".into(),
+                detail: format!("{} local models", available.len()),
+                limits: vec![],
+            });
+            models.extend(available);
+        }
+        Err(_) => providers.push(codex::Status {
+            id: "ollama".into(),
+            name: "Ollama".into(),
+            state: "unavailable".into(),
+            detail: "Start Ollama on this device to use local models.".into(),
+            limits: vec![],
+        }),
+    }
+    Ok(Catalog { models, providers })
+}
+
 #[tauri::command]
 async fn send_message(
     runtime: State<'_, Arc<Runtime>>,
     chat_id: String,
     content: String,
     models: Vec<String>,
+    options: Option<HashMap<String, provider::ModelOptions>>,
     on_event: Channel<RunEvent>,
 ) -> Result<TurnStarted, String> {
+    let options = options.unwrap_or_default();
     if models.iter().any(|model| {
-        !model.starts_with("ollama:")
-            || model[7..].is_empty()
+        !(model.starts_with("ollama:") || model.starts_with("codex:"))
+            || model.split_once(':').is_none_or(|(_, id)| id.is_empty())
             || model.ends_with(":cloud")
             || model.ends_with("-cloud")
     }) {
         return Err("Connect an available provider and choose a model.".into());
+    }
+    for model in &models {
+        if model.starts_with("codex:") {
+            let selected = options.get(model).cloned().unwrap_or_default();
+            runtime
+                .codex
+                .validate(
+                    model,
+                    selected.reasoning_effort.as_deref(),
+                    selected.service_tier.as_deref(),
+                )
+                .await?;
+        }
     }
     let runtime = runtime.inner().clone();
     let mut active = runtime
@@ -221,6 +285,7 @@ async fn send_message(
     }
     drop(active);
     for (run, token) in runs.iter().cloned().zip(tokens) {
+        let options = options.get(&run.model).cloned().unwrap_or_default();
         let (runtime, context, instructions, channel) = (
             runtime.clone(),
             context.clone(),
@@ -228,7 +293,7 @@ async fn send_message(
             on_event.clone(),
         );
         tauri::async_runtime::spawn(async move {
-            run_model(runtime, run, context, instructions, token, channel).await;
+            run_model(runtime, run, context, instructions, token, channel, options).await;
         });
     }
     Ok(TurnStarted { user, runs })
@@ -241,6 +306,7 @@ async fn run_model(
     instructions: Option<String>,
     token: CancellationToken,
     channel: Channel<RunEvent>,
+    options: provider::ModelOptions,
 ) {
     let mut output = String::new();
     let mut pending = String::new();
@@ -262,38 +328,52 @@ async fn run_model(
             status: "running".into(),
             error: None,
         });
-        provider::stream(
-            &runtime.client,
-            &run.model[7..],
-            &context,
-            instructions.as_deref(),
-            |delta| {
-                if output.len() + delta.len() > pavane_core::MAX_OUTPUT_BYTES {
-                    return Err("Response reached the 2 MiB safety limit.".into());
-                }
-                output.push_str(delta);
-                pending.push_str(delta);
-                if last_emit.elapsed().as_millis() >= 40 || pending.len() >= 4096 {
-                    let _ = channel.send(RunEvent {
-                        run_id: run.id.clone(),
-                        chat_id: run.chat_id.clone(),
-                        message_id: run.message_id.clone(),
-                        kind: "delta".into(),
-                        delta: std::mem::take(&mut pending),
-                        status: "running".into(),
-                        error: None,
-                    });
-                    last_emit = std::time::Instant::now();
-                }
-                if last_save.elapsed().as_millis() >= 500 {
-                    runtime
-                        .with_store(|store| store.update_run(&run, &output, "running", now()))?;
-                    last_save = std::time::Instant::now();
-                }
-                Ok(())
-            },
-        )
-        .await
+        let on_delta = |delta: &str| {
+            if output.len() + delta.len() > pavane_core::MAX_OUTPUT_BYTES {
+                return Err("Response reached the 2 MiB safety limit.".into());
+            }
+            output.push_str(delta);
+            pending.push_str(delta);
+            if last_emit.elapsed().as_millis() >= 40 || pending.len() >= 4096 {
+                let _ = channel.send(RunEvent {
+                    run_id: run.id.clone(),
+                    chat_id: run.chat_id.clone(),
+                    message_id: run.message_id.clone(),
+                    kind: "delta".into(),
+                    delta: std::mem::take(&mut pending),
+                    status: "running".into(),
+                    error: None,
+                });
+                last_emit = std::time::Instant::now();
+            }
+            if last_save.elapsed().as_millis() >= 500 {
+                runtime.with_store(|store| store.update_run(&run, &output, "running", now()))?;
+                last_save = std::time::Instant::now();
+            }
+            Ok(())
+        };
+        if let Some(model) = run.model.strip_prefix("codex:") {
+            runtime
+                .codex
+                .stream(
+                    model,
+                    &context,
+                    instructions.as_deref(),
+                    &options,
+                    &token,
+                    on_delta,
+                )
+                .await
+        } else {
+            provider::stream(
+                &runtime.client,
+                &run.model[7..],
+                &context,
+                instructions.as_deref(),
+                on_delta,
+            )
+            .await
+        }
     };
     let outcome = tokio::select! {
         biased;
@@ -329,7 +409,7 @@ async fn run_model(
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             let data = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&data)?;
@@ -349,6 +429,7 @@ pub fn run() {
                     .redirect(reqwest::redirect::Policy::none())
                     .connect_timeout(std::time::Duration::from_secs(3))
                     .build()?,
+                codex: codex::Manager::new(database.join("codex-workspace")),
             });
             runtime.cleanup().map_err(std::io::Error::other)?;
             app.manage(runtime.clone());
@@ -374,8 +455,17 @@ pub fn run() {
             list_workspaces,
             create_workspace,
             discover_models,
+            discover_providers,
             send_message
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Pavane could not start. Check the local database and WebView2 installation.");
+    app.run(|app, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            app.state::<Arc<Runtime>>().codex.shutdown();
+        }
+    });
 }

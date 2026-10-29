@@ -7,11 +7,31 @@ use std::time::Duration;
 const OLLAMA: &str = "http://127.0.0.1:11434";
 const MAX_FRAME: usize = 256 * 1024;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Model {
     pub id: String,
     pub name: String,
     pub provider: String,
+    pub reasoning_efforts: Vec<String>,
+    pub default_reasoning_effort: Option<String>,
+    pub service_tiers: Vec<ServiceTier>,
+    pub is_default: bool,
+    pub description: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ServiceTier {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelOptions {
+    pub reasoning_effort: Option<String>,
+    pub service_tier: Option<String>,
 }
 
 pub async fn discover(client: &reqwest::Client) -> Result<Vec<Model>, String> {
@@ -57,6 +77,7 @@ pub async fn discover(client: &reqwest::Client) -> Result<Vec<Model>, String> {
                 id: format!("ollama:{name}"),
                 name: name.into(),
                 provider: "Ollama".into(),
+                ..Model::default()
             })
         })
         .collect())
