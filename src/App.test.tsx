@@ -171,10 +171,16 @@ it("expires selected content even when title search removes its sidebar row", as
 
 it("does not leave loading stuck when opening an already-expired sidebar row", async () => {
   const expired = { ...second, expiresAt: Date.now() - 1 };
+  let rejectRead: (reason: string) => void = () => {
+    throw new Error("Expired read was not started");
+  };
+  const delayedRead = new Promise<never>((_resolve, reject) => {
+    rejectRead = reject;
+  });
   mocked.listChats.mockResolvedValue([first, expired]);
   mocked.messages.mockImplementation((id: string) =>
     id === second.id
-      ? Promise.reject("Chat expired")
+      ? delayedRead
       : Promise.resolve({ items: [], hasMore: false }),
   );
   render(<App />);
@@ -183,9 +189,13 @@ it("does not leave loading stuck when opening an already-expired sidebar row", a
   fireEvent.click(
     screen.getByRole("button", { name: "Open chat Second conversation" }),
   );
+  expect(screen.getByText("Opening your chat…")).toBeInTheDocument();
   await waitFor(() =>
     expect(screen.queryByText("Opening your chat…")).not.toBeInTheDocument(),
   );
   expect(input).toBeDisabled();
   expect(screen.getByRole("button", { name: "New chat" })).toBeEnabled();
+  await act(async () => {
+    rejectRead("Chat expired");
+  });
 });
