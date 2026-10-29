@@ -245,6 +245,7 @@ impl Manager {
             thread: thread.clone(),
             turn: turn_receiver,
             completed: false,
+            start_submitted: false,
             finished,
         };
         if token.is_cancelled() {
@@ -268,7 +269,16 @@ impl Manager {
             params["effort"] = json!(effort);
         }
         params["serviceTier"] = json!(options.service_tier.as_deref().unwrap_or("default"));
-        let turn = client.request("turn/start", params).await?;
+        guard.start_submitted = true;
+        let turn = match client.request("turn/start", params).await {
+            Ok(turn) => turn,
+            Err(error) => {
+                // An RPC rejection creates no turn; transport failures already
+                // invalidate the client. Neither needs a missing-turn timeout.
+                guard.start_submitted = false;
+                return Err(error);
+            }
+        };
         if let Some(id) = turn["turn"]["id"].as_str() {
             client.record_turn(&thread, id);
         }
@@ -733,6 +743,7 @@ struct TurnGuard {
     thread: String,
     turn: watch::Receiver<Option<String>>,
     completed: bool,
+    start_submitted: bool,
     finished: Arc<AtomicBool>,
 }
 impl Drop for TurnGuard {
@@ -740,9 +751,10 @@ impl Drop for TurnGuard {
         let (client, thread, mut turn) =
             (self.client.clone(), self.thread.clone(), self.turn.clone());
         let completed = self.completed;
+        let start_submitted = self.start_submitted;
         let finished = self.finished.clone();
         tokio::spawn(async move {
-            if !completed && !finished.load(Ordering::Acquire) {
+            if start_submitted && !completed && !finished.load(Ordering::Acquire) {
                 let known = turn.borrow().is_some();
                 if !known
                     && !matches!(
@@ -892,6 +904,52 @@ mod tests {
         }
     }
     const INIT_ONLY: &str = r#"const r=require('node:readline').createInterface({input:process.stdin});r.on('line',line=>{const v=JSON.parse(line);if(v.method==='initialize'){process.stdout.write(JSON.stringify({id:v.id,result:{}})+'\n');process.stdin.pause();}});"#;
+
+    #[tokio::test]
+    async fn pre_start_cancellation_and_rejection_release_only_their_own_session() {
+        let directory = tempfile::tempdir().unwrap();
+        let manager = Manager::new(directory.path().into());
+        let script = r#"let closed=0;require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const v=JSON.parse(line);const send=result=>process.stdout.write(JSON.stringify({id:v.id,result})+'\n');if(v.method==='initialize')send({});if(v.method==='thread/start')send({thread:{id:'rejected-thread'}});if(v.method==='turn/start')process.stdout.write(JSON.stringify({id:v.id,error:{code:-1,message:'synthetic rejection'}})+'\n');if(v.method==='thread/unsubscribe'){closed++;send({});}if(v.method==='probe')send({closed});});"#;
+        let client = Client::attach(fake_command(script).spawn().unwrap(), &manager.ownership)
+            .await
+            .unwrap();
+        *manager.client.lock().await = Some(client.clone());
+        for expected_closed in 1..=2 {
+            let token = CancellationToken::new();
+            if expected_closed == 1 {
+                token.cancel();
+            }
+            assert!(
+                manager
+                    .stream(
+                        "test",
+                        &[],
+                        None,
+                        &crate::provider::ModelOptions::default(),
+                        &token,
+                        |_| Ok(())
+                    )
+                    .await
+                    .is_err()
+            );
+            // A sibling RPC must remain usable. The old guard instead waited
+            // five seconds for an impossible turn and killed the shared broker.
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    if client.request("probe", json!({})).await.unwrap()["closed"]
+                        == expected_closed
+                    {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            assert!(!client.dead.load(Ordering::Acquire));
+        }
+        manager.shutdown();
+    }
 
     #[tokio::test]
     async fn dropping_a_queued_unconsumed_thread_response_releases_its_lease() {
