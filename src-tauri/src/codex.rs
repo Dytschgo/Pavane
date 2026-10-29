@@ -20,7 +20,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
-type Reply = oneshot::Sender<Result<Value, String>>;
+type Reply = oneshot::Sender<Result<ReplyValue, String>>;
 const MAX_FRAME: u64 = 1024 * 1024;
 const FLAGS: &[&str] = &[
     "features.shell_tool=false",
@@ -86,7 +86,6 @@ pub struct Manager {
 struct Ownership {
     stopping: AtomicBool,
     children: Mutex<Vec<Weak<Client>>>,
-    scope: Mutex<Option<crate::process_scope::ProcessScope>>,
 }
 
 impl Manager {
@@ -97,7 +96,6 @@ impl Manager {
             ownership: Ownership {
                 stopping: AtomicBool::new(false),
                 children: Mutex::new(vec![]),
-                scope: Mutex::new(None),
             },
         }
     }
@@ -294,11 +292,6 @@ impl Manager {
                 child.shutdown();
             }
         }
-        if let Ok(scope) = self.ownership.scope.lock() {
-            if let Some(scope) = scope.as_ref() {
-                scope.terminate();
-            }
-        }
     }
 }
 
@@ -314,6 +307,7 @@ enum Event {
 }
 
 struct Client {
+    scope: crate::process_scope::ProcessScope,
     child: Mutex<Child>,
     writer: Arc<tokio::sync::Mutex<ChildStdin>>,
     pending: Arc<Mutex<HashMap<u64, Reply>>>,
@@ -321,6 +315,35 @@ struct Client {
     next: AtomicU64,
     dead: Arc<AtomicBool>,
     models: Mutex<Vec<Model>>,
+}
+
+struct ReplyValue {
+    value: Value,
+    lease: Option<ThreadLease>,
+}
+struct ThreadLease {
+    owner: Weak<Client>,
+    thread: String,
+    adopted: bool,
+}
+impl Drop for ThreadLease {
+    fn drop(&mut self) {
+        if self.adopted {
+            return;
+        }
+        if let Some(client) = self.owner.upgrade() {
+            let thread = self.thread.clone();
+            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                runtime.spawn(async move {
+                    let _ = client
+                        .request("thread/unsubscribe", json!({"threadId":thread}))
+                        .await;
+                });
+            } else {
+                client.shutdown();
+            }
+        }
+    }
 }
 
 struct PendingRequest<'a> {
@@ -344,20 +367,30 @@ fn deliver_response(
     pending: &Mutex<HashMap<u64, Reply>>,
     id: u64,
     value: &Value,
-) -> Option<String> {
-    let reply = pending.lock().ok()?.remove(&id);
+    owner: &Weak<Client>,
+) {
+    let reply = pending
+        .lock()
+        .ok()
+        .and_then(|mut pending| pending.remove(&id));
     let result = if value.get("error").is_some() {
         Err("Codex rejected this request. Check the selected model, sign-in and connection.".into())
     } else {
-        Ok(value["result"].clone())
+        Ok(ReplyValue {
+            value: value["result"].clone(),
+            lease: value["result"]["thread"]["id"]
+                .as_str()
+                .map(|thread| ThreadLease {
+                    owner: owner.clone(),
+                    thread: thread.into(),
+                    adopted: false,
+                }),
+        })
     };
-    let delivered = reply.is_some_and(|reply| reply.send(result).is_ok());
-    // A cancelled thread/start may still succeed remotely. Release that late
-    // ephemeral session even when nobody is waiting for its response anymore.
-    if !delivered {
-        value["result"]["thread"]["id"].as_str().map(str::to_owned)
-    } else {
-        None
+    // The payload owns its lease even while queued inside the oneshot. Dropping
+    // an unconsumed successful response releases the session as well.
+    if let Some(reply) = reply {
+        let _ = reply.send(result);
     }
 }
 
@@ -368,6 +401,11 @@ impl Client {
         overrides: &[String],
         ownership: &Ownership,
     ) -> Result<Arc<Self>, String> {
+        #[cfg(windows)]
+        let mut command = Command::new(crate::process_scope::host_executable()?);
+        #[cfg(windows)]
+        command.arg("--pavane-codex-host").arg(executable);
+        #[cfg(not(windows))]
         let mut command = Command::new(executable);
         command.args(["app-server", "--listen", "stdio://"]);
         for flag in FLAGS {
@@ -387,27 +425,26 @@ impl Client {
         let child = command
             .spawn()
             .map_err(|_| "Codex could not start. Check its installation.".to_string())?;
-        Self::attach(child, ownership).await
+        Self::attach_gated(child, ownership, cfg!(windows)).await
     }
 
-    async fn attach(mut child: Child, ownership: &Ownership) -> Result<Arc<Self>, String> {
-        {
-            let mut scope = ownership
-                .scope
-                .lock()
-                .map_err(|_| "Provider process scope is unavailable.")?;
-            if scope.is_none() {
-                *scope = Some(crate::process_scope::ProcessScope::new()?);
-            }
-            scope
-                .as_ref()
-                .ok_or("Provider process scope is unavailable.")?
-                .assign(&child)?;
-        }
+    #[cfg(test)]
+    async fn attach(child: Child, ownership: &Ownership) -> Result<Arc<Self>, String> {
+        Self::attach_gated(child, ownership, false).await
+    }
+
+    async fn attach_gated(
+        mut child: Child,
+        ownership: &Ownership,
+        gated: bool,
+    ) -> Result<Arc<Self>, String> {
+        let scope = crate::process_scope::ProcessScope::new()?;
+        scope.assign(&child)?;
         let writer = child.stdin.take().ok_or("Codex input is unavailable.")?;
         let stdout = child.stdout.take().ok_or("Codex output is unavailable.")?;
         let client = Arc::new(Self {
             child: Mutex::new(child),
+            scope,
             writer: Arc::new(tokio::sync::Mutex::new(writer)),
             pending: Arc::new(Mutex::new(HashMap::new())),
             streams: Arc::new(Mutex::new(HashMap::new())),
@@ -426,6 +463,19 @@ impl Client {
             }
             children.retain(|child| child.strong_count() > 0);
             children.push(Arc::downgrade(&client));
+        }
+        if gated {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                client
+                    .writer
+                    .lock()
+                    .await
+                    .write_all(crate::process_scope::START_PROVIDER)
+                    .await
+            })
+            .await
+            .map_err(|_| "The provider startup gate timed out.")?
+            .map_err(|_| "The provider startup gate failed.")?;
         }
         let (pending, streams, dead) = (
             client.pending.clone(),
@@ -450,15 +500,7 @@ impl Client {
                 };
                 if value.get("method").is_none() {
                     if let Some(id) = value["id"].as_u64() {
-                        if let Some(thread) = deliver_response(&pending, id, &value) {
-                            if let Some(client) = owner.upgrade() {
-                                tokio::spawn(async move {
-                                    let _ = client
-                                        .request("thread/unsubscribe", json!({"threadId":thread}))
-                                        .await;
-                                });
-                            }
-                        }
+                        deliver_response(&pending, id, &value, &owner);
                     }
                 } else {
                     let method = value["method"].as_str().unwrap_or("");
@@ -466,44 +508,40 @@ impl Client {
                     let thread = params["threadId"]
                         .as_str()
                         .or_else(|| params["thread"]["id"].as_str());
-                    if let Some(thread) = thread {
-                        if let Ok(mut map) = streams.lock() {
-                            if let Some(stream) = map.get(thread) {
-                                let event = match method {
-                                    "item/agentMessage/delta" => params["delta"]
-                                        .as_str()
-                                        .map(|delta| Event::Delta(delta.into())),
-                                    "turn/started" => {
-                                        let _ = stream
-                                            .turn
-                                            .send(params["turn"]["id"].as_str().map(str::to_owned));
-                                        None
-                                    }
-                                    "turn/completed" => {
-                                        stream.finished.store(true, Ordering::Release);
-                                        Some(Event::Completed(
-                                            params["turn"]["status"]
-                                                .as_str()
-                                                .unwrap_or("failed")
-                                                .into(),
-                                        ))
-                                    }
-                                    "item/started"
-                                        if !matches!(
-                                            params["item"]["type"].as_str(),
-                                            Some("userMessage" | "agentMessage" | "reasoning")
-                                        ) =>
-                                    {
-                                        Some(Event::ToolBlocked)
-                                    }
-                                    _ => None,
-                                };
-                                if let Some(event) = event {
-                                    if stream.sender.try_send(event).is_err() {
-                                        map.remove(thread);
-                                    }
-                                }
+                    if let Some(thread) = thread
+                        && let Ok(mut map) = streams.lock()
+                        && let Some(stream) = map.get(thread)
+                    {
+                        let event = match method {
+                            "item/agentMessage/delta" => params["delta"]
+                                .as_str()
+                                .map(|delta| Event::Delta(delta.into())),
+                            "turn/started" => {
+                                let _ = stream
+                                    .turn
+                                    .send(params["turn"]["id"].as_str().map(str::to_owned));
+                                None
                             }
+                            "turn/completed" => {
+                                stream.finished.store(true, Ordering::Release);
+                                Some(Event::Completed(
+                                    params["turn"]["status"].as_str().unwrap_or("failed").into(),
+                                ))
+                            }
+                            "item/started"
+                                if !matches!(
+                                    params["item"]["type"].as_str(),
+                                    Some("userMessage" | "agentMessage" | "reasoning")
+                                ) =>
+                            {
+                                Some(Event::ToolBlocked)
+                            }
+                            _ => None,
+                        };
+                        if let Some(event) = event
+                            && stream.sender.try_send(event).is_err()
+                        {
+                            map.remove(thread);
                         }
                     }
                     // No server-initiated approval/tool request is ever accepted.
@@ -582,9 +620,13 @@ impl Client {
             self.write(json!({"id":id,"method":method,"params":params}))
                 .await?;
             registration.writing = false;
-            receiver
+            let mut reply = receiver
                 .await
-                .map_err(|_| "Codex disconnected.".to_string())?
+                .map_err(|_| "Codex disconnected.".to_string())??;
+            if let Some(lease) = reply.lease.as_mut() {
+                lease.adopted = true;
+            }
+            Ok(reply.value)
         };
         match tokio::time::timeout(timeout, exchange).await {
             Ok(result) => result,
@@ -671,13 +713,14 @@ impl Client {
     }
 
     fn record_turn(&self, thread: &str, turn: &str) {
-        if let Ok(map) = self.streams.lock() {
-            if let Some(stream) = map.get(thread) {
-                let _ = stream.turn.send(Some(turn.into()));
-            }
+        if let Ok(map) = self.streams.lock()
+            && let Some(stream) = map.get(thread)
+        {
+            let _ = stream.turn.send(Some(turn.into()));
         }
     }
     fn shutdown(&self) {
+        self.scope.terminate();
         self.dead.store(true, Ordering::Release);
         if let Ok(mut child) = self.child.lock() {
             let _ = child.start_kill();
@@ -714,15 +757,14 @@ impl Drop for TurnGuard {
                     client.shutdown();
                 }
                 let id = turn.borrow().clone();
-                if let Some(id) = id {
-                    if client
+                if let Some(id) = id
+                    && client
                         .request("turn/interrupt", json!({"threadId":thread,"turnId":id}))
                         .await
                         .is_err()
-                        && !finished.load(Ordering::Acquire)
-                    {
-                        client.shutdown();
-                    }
+                    && !finished.load(Ordering::Acquire)
+                {
+                    client.shutdown();
                 }
             }
             if let Ok(mut map) = client.streams.lock() {
@@ -774,12 +816,12 @@ fn disabled_integrations(config: &Value) -> Result<Vec<String>, String> {
 
 fn verify_isolation(config: &Value) -> Result<(), String> {
     for table in ["mcp_servers", "plugins"] {
-        if let Some(entries) = config[table].as_object() {
-            if entries.values().any(|entry| entry["enabled"] != false) {
-                return Err(
-                    "Codex could not disable inherited integrations. Chat was not started.".into(),
-                );
-            }
+        if let Some(entries) = config[table].as_object()
+            && entries.values().any(|entry| entry["enabled"] != false)
+        {
+            return Err(
+                "Codex could not disable inherited integrations. Chat was not started.".into(),
+            );
         }
     }
     for feature in [
@@ -847,10 +889,39 @@ mod tests {
         Ownership {
             stopping: AtomicBool::new(false),
             children: Mutex::new(vec![]),
-            scope: Mutex::new(None),
         }
     }
     const INIT_ONLY: &str = r#"const r=require('node:readline').createInterface({input:process.stdin});r.on('line',line=>{const v=JSON.parse(line);if(v.method==='initialize'){process.stdout.write(JSON.stringify({id:v.id,result:{}})+'\n');process.stdin.pause();}});"#;
+
+    #[tokio::test]
+    async fn dropping_a_queued_unconsumed_thread_response_releases_its_lease() {
+        let ownership = owner();
+        let script = r#"let closed=0;require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const v=JSON.parse(line);const send=result=>process.stdout.write(JSON.stringify({id:v.id,result})+'\n');if(v.method==='initialize')send({});if(v.method==='thread/unsubscribe'){closed++;send({});}if(v.method==='probe')send({closed});});"#;
+        let client = Client::attach(fake_command(script).spawn().unwrap(), &ownership)
+            .await
+            .unwrap();
+        let (sender, receiver) = oneshot::channel();
+        client.pending.lock().unwrap().insert(900, sender);
+        deliver_response(
+            &client.pending,
+            900,
+            &json!({"id":900,"result":{"thread":{"id":"queued-thread"}}}),
+            &Arc::downgrade(&client),
+        );
+        // send() succeeded, but the request future was cancelled before polling.
+        drop(receiver);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if client.request("probe", json!({})).await.unwrap()["closed"] == 1 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        client.shutdown();
+    }
 
     #[tokio::test]
     async fn blocked_writes_have_a_deadline_and_invalidate_the_client() {

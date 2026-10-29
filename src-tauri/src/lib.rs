@@ -1,5 +1,6 @@
 mod codex;
 mod process_scope;
+pub use process_scope::run_host as run_provider_host;
 mod provider;
 
 use pavane_core::{Chat, Message, Run, Store, Workspace};
@@ -10,6 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State, ipc::Channel};
+use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
@@ -77,6 +79,26 @@ struct TurnStarted {
 struct MessagePage {
     items: Vec<Message>,
     has_more: bool,
+}
+
+fn external_url(value: &str) -> Result<reqwest::Url, String> {
+    let parsed = reqwest::Url::parse(value).map_err(|_| "This link is not a valid web address.")?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err("Only ordinary HTTP and HTTPS links can open from chat.".into());
+    }
+    Ok(parsed)
+}
+
+#[tauri::command]
+fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let parsed = external_url(&url)?;
+    app.opener()
+        .open_url(parsed.as_str(), None::<&str>)
+        .map_err(|_| "The browser could not open this link.".into())
 }
 
 #[tauri::command]
@@ -411,6 +433,11 @@ async fn run_model(
 
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .setup(|app| {
             let data = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&data)?;
@@ -457,7 +484,8 @@ pub fn run() {
             create_workspace,
             discover_models,
             discover_providers,
-            send_message
+            send_message,
+            open_external_url
         ])
         .build(tauri::generate_context!())
         .expect("Pavane could not start. Check the local database and WebView2 installation.");
@@ -469,4 +497,23 @@ pub fn run() {
             app.state::<Arc<Runtime>>().codex.shutdown();
         }
     });
+}
+
+#[cfg(test)]
+mod link_tests {
+    use super::external_url;
+    #[test]
+    fn links_cannot_invoke_files_shells_or_embedded_credentials() {
+        assert!(external_url("https://example.com/docs?q=hello").is_ok());
+        for url in [
+            "file:///C:/Windows/System32/cmd.exe",
+            "javascript:alert(1)",
+            "data:text/html,hello",
+            "ms-settings:privacy",
+            "https://user:password@example.com/",
+            "not a url",
+        ] {
+            assert!(external_url(url).is_err(), "accepted unsafe URL scheme");
+        }
+    }
 }
