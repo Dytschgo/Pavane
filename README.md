@@ -11,7 +11,9 @@ pnpm install --frozen-lockfile
 pnpm desktop
 ```
 
-To use a model, start Ollama with a local model already installed, open **Connections**, and connect. The adapter uses `127.0.0.1:11434`; cloud-tagged models are excluded. Pavane never downloads a model or installs a provider automatically.
+If Codex CLI is installed and signed in with ChatGPT, Pavane discovers its models and selects the default automatically. Open the composer model picker to choose a model, reasoning level or supported service tier. Your login stays with Codex; Pavane never copies its credentials. See the [official Codex setup](https://developers.openai.com/codex/cli/).
+
+Local Ollama models are discovered automatically too. Start Ollama with a local model already installed; **Connections** refreshes discovery and shows provider status. Ollama uses `127.0.0.1:11434`; cloud-tagged models are excluded. Pavane never downloads a model or installs a provider automatically.
 
 ```powershell
 pnpm check
@@ -21,18 +23,21 @@ cargo test --workspace --locked
 pnpm desktop:build
 ```
 
-The standalone Windows executable is `target/release/pavane.exe`. This foundation has no installer, signing, updater, telemetry, account, hosted service, or cloud sync.
+The standalone Windows executable is `target/release/pavane.exe`. This foundation has no installer, signing, updater, Pavane account, hosted service, or cloud sync. Provider services have their own accounts and data policies.
 
 ## What works
 
 - SQLite conversations and drafts that survive reloads and restarts.
 - **Delete Soon** chats saved for 30 days from creation, with an option to keep them.
 - Local Ollama model discovery and streaming, partial-response recovery, and cancellation.
+- Codex subscription chat through the official local app-server, with real model capabilities and provider-reported usage windows.
+- Searchable model picker, favourites, remembered reasoning/tier settings and Ctrl+1–9 favourite shortcuts.
+- Markdown replies, lists, tables and code blocks with copy actions; safe web links open in your default browser.
 - Up to four parallel model responses per prompt, with a bounded native queue.
 - Projects, spaces, and bots with reusable instructions and grouped conversations.
 - Six workflow routes, keyboard navigation, model search, and connection settings.
 
-Subscription bridges, provider-reported limits, autonomous agent swarms, attachments, and image/video generation are tracked in [TASKS.md](TASKS.md). Their interface scaffolds are labeled **Planned**. Parallel model comparison does not delegate tools or create autonomous agents.
+Additional provider adapters, autonomous agent swarms, attachments, and image/video generation are tracked in [TASKS.md](TASKS.md). Their interface scaffolds are labeled **Planned**. Parallel model comparison does not delegate tools or create autonomous agents.
 
 ## Your data
 

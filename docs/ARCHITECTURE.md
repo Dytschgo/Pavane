@@ -4,7 +4,7 @@
 
 Tauri 2 owns the Windows window and uses the system WebView2 runtime. Rust owns SQLite, retention, HTTP transport, cancellation and scheduling. React 19/Vite renders the UI. There is no application server or bundled Node runtime in the desktop artifact. Radix primitives provide dialogs, menus and tooltips, with local shadcn-style components and CSS tokens.
 
-`crates/pavane-core` contains persistence/domain behavior without Tauri or network dependencies. `src-tauri` is the native command boundary and local-model runtime. `src` contains typed IPC calls, UI and transient run state. Only harmless UI selection metadata is kept in localStorage; conversation content and drafts are saved to SQLite.
+`crates/pavane-core` contains persistence/domain behavior without Tauri or network dependencies. `src-tauri` is the native command boundary and provider runtime. `src` contains typed IPC calls, UI and transient run state. Only harmless UI selection metadata is kept in localStorage; conversation content and drafts are saved to SQLite.
 
 ## Data and recovery
 
@@ -24,17 +24,23 @@ The setting governs local persistence only. No app can promise deletion of OS sn
 
 ## Runs and provider boundary
 
-Ollama is the only working inference adapter in this slice. HTTP is restricted to `127.0.0.1:11434`, bypasses proxies, and refuses redirects. It receives no filesystem tools or credentials. Cloud-tagged models are rejected. A selected local model can itself have substantial RAM requirements; Pavane's memory measurements must be reported separately from inference.
+The Ollama adapter restricts HTTP to `127.0.0.1:11434`, bypasses proxies, and refuses redirects. It receives no filesystem tools or credentials. Cloud-tagged models are rejected. A selected local model can itself have substantial RAM requirements; Pavane's memory measurements must be reported separately from inference.
+
+The Codex adapter launches the installed official CLI's app-server over stdio. It uses the existing ChatGPT login without opening or copying raw credentials. Model IDs, default reasoning, supported efforts, service tiers and usage windows come from the server; unavailable limits stay unknown. This protocol was exercised with CLI 0.165.0 and needs compatibility verification for later versions. Pavane does not alter the user's Codex configuration.
+
+Each prompt uses an ephemeral Codex thread and the bounded SQLite transcript. The dedicated working directory contains no project source. Per-process overrides disable shell execution, browser/computer/image tools, delegation, hooks, notifications, web search, history and configured telemetry exporters. A config-only bootstrap discovers inherited MCP/plugin names in memory; explicit disabled entries then override merged configuration in the actual client. Effective settings are checked before inference. Raw configuration is never logged or copied into arguments. Text chat uses a read-only sandbox with network access disabled and refuses every server approval request. Some Codex versions can still register native patch-tool metadata; the security boundary is the sandbox and denial of approvals, not an assertion that every tool disappears. Provider-side data retention is separate from Pavane's local Delete Soon policy.
+
+RPC exchanges include write and response deadlines, bounded pending requests and bounded event queues. A timeout invalidates the client so discovery can reconnect. A response-owned thread lease cleans up cancelled thread creation even if its reply was queued but never consumed. A run guard interrupts accepted/in-flight turns and unsubscribes ephemeral threads; rejected or never-submitted turns unsubscribe without terminating sibling chats. On Windows a waiting self-executable host is assigned to a private kill-on-close Job Object before receiving its startup gate. Only then may it launch Codex, whose descendants inherit that job. The gate reads the pipe without read-ahead, preserving the first JSON request. Shutdown owns startup children synchronously; closing/crashing Pavane terminates its provider jobs. This does not terminate an unrelated Codex process.
 
 The native scheduler allows four executing requests and eight total active/queued runs. A chat accepts one prompt at a time; a prompt may create up to four independent model responses. This implements comparison fan-out, not autonomous multi-agent orchestration. Cancellation aborts the native HTTP future and saves partial text, but a provider may continue work after the client disconnects. Runs have a ten-minute timeout. Queue, HTTP and decoder limits are enforced in Rust, independent of UI controls.
 
 Transport NDJSON is decoded across arbitrary byte and UTF-8 boundaries with a 256 KiB per-frame limit. Text is coalesced for IPC at roughly 40 ms or 4 KiB; final text is flushed before terminal status. The renderer retains a bounded live-response cache to preserve text when switching conversations during a stream. Native checkpoints are authoritative after reload.
 
-Consumer subscriptions and API billing are separate integrations. A future adapter must declare supported models, authentication, text/tools/media capabilities, limit data source, cancellation and recovery. Unknown quota stays unknown. No OAuth tokens or API keys are accepted or stored in this version. Use OS-protected credential storage for future API adapters and avoid reusing another app's private token files.
+Consumer subscriptions and API billing are separate integrations. Every additional adapter must declare supported models, authentication, text/tools/media capabilities, limit data source, cancellation and recovery. Unknown quota stays unknown. Pavane accepts no OAuth tokens or API keys in this version. Use OS-protected credential storage for future API adapters and avoid reading another app's private token files.
 
 ## UI security
 
-Only local bundled content runs in the desktop WebView. CSP excludes remote scripts and frames. The renderer uses explicit native commands with no shell/filesystem plugins. Model and user text render as text, without raw HTML execution. Dialogs and menus use accessible Radix behavior. No provider tools execute. There is no telemetry, cloud synchronization, authentication system or billing infrastructure.
+Only local bundled content runs in the desktop WebView. CSP excludes remote scripts and frames. The renderer uses explicit native commands with no shell/filesystem plugins. Assistant Markdown rejects raw HTML, blocks remote images and provides copyable code blocks/tables. Native link opening accepts only ordinary HTTP/HTTPS URLs with a host and no embedded credentials; renderer-wide automatic opening is disabled. Dialogs and menus use accessible Radix behavior. There is no Pavane telemetry, cloud synchronization, authentication system or billing infrastructure. Codex remains a separate provider process with the constraints described above.
 
 ## Verification and remaining risks
 

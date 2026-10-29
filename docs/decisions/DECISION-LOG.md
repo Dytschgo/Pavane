@@ -13,3 +13,9 @@ No subscription credentials or paid provider calls are needed for development. C
 ## DEC-0003 — Retention is local and measured from creation
 
 Delete Soon means durable local storage with a fixed creation + 30-day expiry, not incognito mode and not a rolling last-active window. The app rejects access at the deadline and purges rows on startup/every minute while running. Keep clears the deadline before expiry. No secure-erasure or provider-side deletion promise is implied. Backups and future assets need explicit lifecycle support.
+
+## DEC-0004 — Codex subscription chat and reference correction
+
+Dylan prioritized a real Codex model and the supplied picker, then rejected the initial composer and asked for T3 Chat as the direct reference. The current candidate uses the official local app-server with CLI-owned credentials and actual model/limit data, with the isolation and rollback contract in [ADR-0001](ADR-0001-CODEX-CHAT.md). This supersedes DEC-0002's initial Ollama-only delivery scope. Safe Markdown replaces plain-text assistant rendering. The UI keeps Pavane's neutral palette while adopting T3 Chat's borderless editor, input typography and separate control row; no T3 source is copied.
+
+Dylan also requires further app builds/tests on the lab Windows PC through LabManager. The exact native policy is authorized; LabManager's separate repair thread owns unblocking its source validation/runner path. Do not bypass the manager or resume coding-PC tests. License choice, merges, provider API billing and production infrastructure remain outside this change.

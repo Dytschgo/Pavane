@@ -29,3 +29,22 @@ One warm-machine release launch reached automation-ready composer state in 555 m
 ## Delivery limits
 
 This is an unsigned standalone development executable and a reviewable source PR. CI results are separate from local checks and must be read from GitHub. There is no installer, published release, merge or deployment. Only local Ollama inference is implemented; subscription bridges, provider limit reporting, autonomous swarms, attachments and media generation remain explicit follow-ups. Licensing is deferred by the project owner.
+
+## Codex/chat hill climb — candidate 5473ce0
+
+The sections above record the earlier foundation. Its published PR head `868ca64` passed the single Windows CI check. They do not establish verification of the newer candidate or describe its Codex capabilities.
+
+Candidate `5473ce01315ad95f5741e64fa6268ed98fc12cbc` adds the official Codex app-server bridge, actual model/reasoning/tier/limit discovery, persisted picker preferences, safe Markdown/code rendering and a composer correction based on live T3 Chat inspection. The bridge, its process-lifetime fixes and UI belong to one usable chat flow; the larger source/lockfile diff is cohesive across native transport and renderer. No database schema changed and no T3 source was copied.
+
+Before Dylan required lab-only testing, these checks ran on the coding PC:
+
+- Twelve renderer tests and nine core storage tests passed on earlier hill-climb source. The latest delayed-discovery test and composer changes were not part of that result.
+- At native candidate `62077a1`, clippy and twelve native tests passed, with one live test ignored by default. An explicit real subscription round trip with GPT-6.1-Sol passed after fixing buffered Windows launcher input. The gate echo probe reproduced the lost first request before the fix and preserved it afterward.
+- Real native UI exercised discovery, reasoning/service-tier controls, favourites across reload and a streamed Markdown/code reply. The later full Codex smoke did **not** pass: after reload it attempted a second send before discovery completed and opened the picker. Startup-send guarding and the smoke readiness wait were corrected in source, but the final interrupt/forced-exit sequence has not been rerun.
+- Earlier native mock-provider smoke passed before the latest launcher/UI corrections. It is not a final-candidate pass.
+
+Three independent native review passes found startup ownership, bounded-write/reconnect, cancelled/queued reply cleanup and Windows launch-containment defects. The reviewer accepted the gated/unbuffered launcher and thread-response lease at `62077a1`, then found rejected turn startup could terminate sibling chats. `cca379c` fixes that and adds a synthetic regression; execution is pending. Read-only Claude UI advice informed the first picker/chat revision. Dylan subsequently rejected the older shipped composer screenshot, and root inspected live T3 Chat plus local T3 Code composer structure before the source correction.
+
+After the lab-only instruction, no further local app tests/builds were run. Formatters updated source, and `git diff --check` found no whitespace errors. The focused/multiline screenshots and geometry/draft-preservation regressions are prepared in the native fixture; **they have not yet been produced for this candidate**. Final format/lint/types/tests, native visual/interaction checks, live Codex cancellation/containment and the optimized executable remain pending on the lab. See [the lab gate and exact plan](LAB-VERIFICATION.md).
+
+The existing `target/release/pavane.exe` remains the old foundation build. Do not tell the user it contains the new Codex/chat changes. No final RAM/startup measurement exists for this candidate, and no updated binary has been launched or published. License remains deferred; PR #1 remains unmerged.
