@@ -230,6 +230,7 @@ export function App() {
       setSelectedChat(null);
       setMessages([]);
       setDraft("");
+      setLoading(false);
       draftCache.current.delete(currentId);
       for (const [id, message] of liveMessages.current) {
         if (message.chatId === currentId) liveMessages.current.delete(id);
@@ -1382,6 +1383,18 @@ export function App() {
               void api
                 .rename(renameId, renameTitle)
                 .then(async () => {
+                  setSelectedChat((previous) =>
+                    previous?.id === renameId
+                      ? { ...previous, title: renameTitle.trim() }
+                      : previous,
+                  );
+                  setChats((previous) =>
+                    previous.map((chat) =>
+                      chat.id === renameId
+                        ? { ...chat, title: renameTitle.trim() }
+                        : chat,
+                    ),
+                  );
                   setRenameId(null);
                   await refresh();
                 })

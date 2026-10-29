@@ -2,6 +2,55 @@ use pavane_core::{DELETE_SOON_MS, Store};
 const NOW: i64 = 1_800_000_000_000;
 
 #[test]
+fn closed_database_backup_restores_saved_conversations() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("pavane.sqlite3");
+    let backup = directory.path().join("backup.sqlite3");
+    let mut store = Store::open(&path).unwrap();
+    let chat = store.create_chat(false, None, NOW).unwrap();
+    let (_, runs) = store
+        .begin_turn(&chat.id, "Original conversation", &["model".into()], NOW)
+        .unwrap();
+    store
+        .update_run(&runs[0], "Original answer", "complete", NOW)
+        .unwrap();
+    drop(store);
+    std::fs::copy(&path, &backup).unwrap();
+    let changed = Store::open(&path).unwrap();
+    changed.delete_chat(&chat.id).unwrap();
+    drop(changed);
+    std::fs::copy(&backup, &path).unwrap();
+    let restored = Store::open(&path).unwrap();
+    assert_eq!(
+        restored.messages(&chat.id, None, NOW).unwrap()[1].content,
+        "Original answer"
+    );
+}
+
+#[test]
+fn newer_or_corrupt_databases_are_not_replaced() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("newer.sqlite3");
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection.execute_batch("PRAGMA user_version=2; CREATE TABLE sentinel(value TEXT); INSERT INTO sentinel VALUES ('keep me');").unwrap();
+    drop(connection);
+    assert!(Store::open(&path).is_err());
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT value FROM sentinel", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "keep me"
+    );
+    let corrupt = directory.path().join("corrupt.sqlite3");
+    let bytes = b"not a SQLite database";
+    std::fs::write(&corrupt, bytes).unwrap();
+    assert!(Store::open(&corrupt).is_err());
+    assert_eq!(std::fs::read(&corrupt).unwrap(), bytes);
+}
+
+#[test]
 fn second_open_cannot_interrupt_a_live_owner() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("pavane.sqlite3");

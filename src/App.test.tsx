@@ -168,3 +168,23 @@ it("expires selected content even when title search removes its sidebar row", as
   );
   expect(screen.queryByText("Keep this chat")).not.toBeInTheDocument();
 });
+
+it("does not leave loading stuck when opening an already-expired sidebar row", async () => {
+  const expired = { ...second, expiresAt: Date.now() - 1 };
+  mocked.listChats.mockResolvedValue([first, expired]);
+  mocked.messages.mockImplementation((id: string) =>
+    id === second.id
+      ? Promise.reject("Chat expired")
+      : Promise.resolve({ items: [], hasMore: false }),
+  );
+  render(<App />);
+  const input = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.click(
+    screen.getByRole("button", { name: "Open chat Second conversation" }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText("Opening your chat…")).not.toBeInTheDocument(),
+  );
+  expect(input).toBeEnabled();
+});
