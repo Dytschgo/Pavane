@@ -1,0 +1,27 @@
+:root {
+  --background: light-dark(oklch(99% 0 none), oklch(17% 0.003 285));
+  --foreground: light-dark(oklch(20% 0 none), oklch(94% 0.002 285));
+  --rail: light-dark(oklch(96% 0 none), oklch(15.8% 0.003 285));
+  --sidebar: light-dark(oklch(97.5% 0 none), oklch(18.7% 0.003 285));
+  --card: light-dark(oklch(100% 0 none), oklch(20.3% 0.003 285));
+  --popover: light-dark(oklch(100% 0 none), oklch(22% 0.003 285));
+  --secondary: light-dark(oklch(95% 0 none), oklch(24% 0.003 285));
+  --accent: light-dark(oklch(93% 0 none), oklch(25.5% 0.003 285));
+  --muted-foreground: light-dark(oklch(44% 0 none), oklch(67% 0.003 285));
+  --subtle-foreground: light-dark(oklch(48% 0 none), oklch(60% 0.003 285));
+  --border: light-dark(oklch(91% 0 none), oklch(25% 0.003 285));
+  --border-strong: light-dark(oklch(85% 0 none), oklch(31% 0.003 285));
+  --primary: light-dark(oklch(23% 0 none), oklch(93% 0.002 285));
+  --primary-foreground: light-dark(oklch(98% 0 none), oklch(20% 0.003 285));
+  --ring: light-dark(oklch(45% 0.08 285), oklch(75% 0.07 285));
+  --destructive: oklch(55% 0.18 25);
+  --destructive-foreground: light-dark(oklch(44% 0.17 25), oklch(78% 0.12 25));
+  --destructive-surface: color-mix(
+    in oklch,
+    var(--destructive) 9%,
+    var(--background)
+  );
+  --success: light-dark(oklch(45% 0.09 155), oklch(72% 0.08 155));
+  --radius: 7px;
+  --title-size: clamp(25px, 1.3rem + 1vw, 34px);
+}

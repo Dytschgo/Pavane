@@ -1,0 +1,22 @@
+# Pavane desktop tasks
+
+This is the new desktop direction, authorized on 29 October 2026. The retired SaaS backlog is not part of this project. The historical primary checkout at `D:/Code/Pavane` is preserved and must not be pushed into this repository.
+
+| ID              | Outcome                                                                   | Status   | Owner | Evidence / next step                                                                                                               |
+| --------------- | ------------------------------------------------------------------------- | -------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| PV-DESKTOP-001  | Windows Rust/SQLite foundation and six workflow routes                    | working  | Sol   | `feat/desktop-foundation`; native verification and review in progress                                                              |
+| PV-RESEARCH-001 | T3 chat/orchestration patterns                                            | done     | Luna  | Read-only at T3 `519d64f6cec0a0f9ed18fbca4a3f8695cac44506`; [research](docs/RESEARCH.md)                                           |
+| PV-RESEARCH-002 | Provider/subscription feasibility                                         | done     | Luna  | Bounded research; unresolved provider details retained in [research](docs/RESEARCH.md)                                             |
+| PV-PROVIDER-001 | Codex subscription bridge, scoped chat transport and real rate-limit data | todo     | —     | Prototype official app-server protocol; independently review tool isolation, auth, cancellation and data retention before shipping |
+| PV-PROVIDER-002 | Claude, Gemini and Grok adapters                                          | todo     | —     | Verify each supported authentication path, subscription/API boundary, cancellation and limits; no assumed parity                   |
+| PV-KEYS-001     | API-key adapters and Windows-protected credentials                        | todo     | —     | Credential Manager; no keys in SQLite, renderer persistence, logs or Git                                                           |
+| PV-SWARM-001    | Autonomous swarms with scoped tools                                       | todo     | —     | Build on persisted runs; define delegation, tool grants, cancellation tree, budgets and recovery                                   |
+| PV-MEDIA-001    | Attachment storage and expiry                                             | todo     | —     | Extend retention to assets before accepting uploads                                                                                |
+| PV-IMAGE-001    | Image workflow                                                            | scaffold | —     | Route and planned state; no generation claims                                                                                      |
+| PV-VIDEO-001    | Video workflow                                                            | scaffold | —     | Route and planned state; no generation claims                                                                                      |
+| PV-CONTEXT-001  | Project files, richer space context and bot editing                       | todo     | —     | Local names/instructions and grouped chat work in foundation; richer context follows                                               |
+| PV-PERF-001     | Reproducible Windows startup/memory benchmarks                            | todo     | —     | Record cold/warm launch and WebView process tree; do not claim a RAM target from bundle size                                       |
+| PV-RELEASE-001  | Signed Windows installer and updater                                      | todo     | —     | Define release provenance, signing, upgrade/rollback and data backup first                                                         |
+| PV-LICENSE-001  | Select open-source license                                                | deferred | Dylan | Explicit response: decide later; do not add a license unilaterally                                                                 |
+
+Statuses describe actual delivery: `scaffold` means navigation and an honest planned state, `PR` means reviewable and unmerged, and `done` requires the recorded result. No merge, production deployment, paid model usage, or infrastructure changes are authorized by this list.

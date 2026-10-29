@@ -1,0 +1,1385 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import * as Menu from "@radix-ui/react-dropdown-menu";
+import {
+  ArrowDown,
+  ArrowUp,
+  AudioLines,
+  Bot,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  Clock3,
+  Copy,
+  Folder,
+  HardDrive,
+  Image,
+  Layers3,
+  LoaderCircle,
+  MessageCircle,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Pencil,
+  Plus,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Trash2,
+  Video,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { api, errorText, native } from "./lib/api";
+import { applyRunEvent, daysRemaining } from "./lib/types";
+import type {
+  Chat,
+  Message,
+  Model,
+  RunEvent,
+  View,
+  Workspace,
+} from "./lib/types";
+import { Button } from "./components/ui/button";
+import { Tip, TooltipProvider } from "./components/ui/tooltip";
+import { Modal } from "./components/ui/modal";
+import { ModelPicker } from "./components/model-picker";
+import { Providers } from "./components/providers";
+
+const views: { id: View; label: string; icon: LucideIcon }[] = [
+  { id: "chat", label: "Chat", icon: MessageCircle },
+  { id: "projects", label: "Projects", icon: Folder },
+  { id: "spaces", label: "Spaces", icon: Layers3 },
+  { id: "bots", label: "Bots", icon: Bot },
+  { id: "images", label: "Images", icon: Image },
+  { id: "videos", label: "Videos", icon: Video },
+];
+const descriptions = {
+  projects: "Keep a longer piece of work together.",
+  spaces: "A place for a topic, with its own context.",
+  bots: "A familiar assistant, with instructions you choose.",
+};
+
+export function App() {
+  const [view, setView] = useState<View>("chat");
+  const [sidebar, setSidebar] = useState(true);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [models, setModels] = useState<Model[]>([]);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [swarm, setSwarm] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [moreHistory, setMoreHistory] = useState(false);
+  const [hasMoreChats, setHasMoreChats] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [createKind, setCreateKind] = useState<Workspace["kind"] | null>(null);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [roadmap, setRoadmap] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const selection = useRef(0);
+  const currentRef = useRef<string | null>(null);
+  const draftQueue = useRef<Promise<void>>(Promise.resolve());
+  const end = useRef<HTMLDivElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const nearBottom = useRef(true);
+  const liveMessages = useRef(new Map<string, Message>());
+  const current = chats.find((chat) => chat.id === currentId);
+  const workspace = workspaces.find((item) => item.id === workspaceId);
+  const running = messages.some((message) =>
+    ["pending", "running"].includes(message.status),
+  );
+
+  const report = useCallback(
+    (failure: unknown) => setError(errorText(failure)),
+    [],
+  );
+  const refresh = useCallback(async () => {
+    const list = await api.listChats();
+    setChats(list);
+    setHasMoreChats(list.length === 100);
+    return list;
+  }, []);
+
+  const openChat = useCallback(
+    async (chat: Chat) => {
+      const version = ++selection.current;
+      currentRef.current = chat.id;
+      setCurrentId(chat.id);
+      setWorkspaceId(chat.workspaceId);
+      setMessages([]);
+      setDraft("");
+      setLoading(true);
+      nearBottom.current = true;
+      try {
+        await draftQueue.current;
+        const [history, savedDraft] = await Promise.all([
+          api.messages(chat.id),
+          api.draft(chat.id),
+        ]);
+        if (selection.current !== version) return;
+        setMessages(
+          history.items.map(
+            (message) => liveMessages.current.get(message.id) ?? message,
+          ),
+        );
+        setMoreHistory(history.hasMore);
+        for (const message of history.items) {
+          if (!["running", "pending"].includes(message.status))
+            liveMessages.current.delete(message.id);
+        }
+        setDraft(savedDraft);
+      } catch (failure) {
+        if (selection.current === version) report(failure);
+      } finally {
+        if (selection.current === version) setLoading(false);
+      }
+    },
+    [report],
+  );
+
+  useEffect(() => {
+    if (!native) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([api.listChats(), api.workspaces()])
+      .then(async ([list, savedWorkspaces]) => {
+        if (cancelled) return;
+        setChats(list);
+        setHasMoreChats(list.length === 100);
+        setWorkspaces(savedWorkspaces);
+        const remembered = localStorage.getItem("pavane.selectedChat");
+        const chat = list.find((item) => item.id === remembered) ?? list[0];
+        if (chat) await openChat(chat);
+        else {
+          const first = await api.createChat();
+          setChats([first]);
+          await openChat(first);
+        }
+      })
+      .catch((failure: unknown) => {
+        report(failure);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openChat, report]);
+
+  useEffect(() => {
+    if (currentId) localStorage.setItem("pavane.selectedChat", currentId);
+  }, [currentId]);
+
+  useEffect(() => {
+    if (nearBottom.current) end.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!native) return;
+    const timer = window.setInterval(() => {
+      void refresh()
+        .then((list) => {
+          if (
+            currentRef.current &&
+            !list.some((chat) => chat.id === currentRef.current)
+          ) {
+            // Only clear a known expired chat; pagination can hide a retained one.
+            const selected = chats.find(
+              (chat) => chat.id === currentRef.current,
+            );
+            if (selected?.expiresAt && selected.expiresAt <= Date.now()) {
+              ++selection.current;
+              currentRef.current = null;
+              setCurrentId(null);
+              setMessages([]);
+              setDraft("");
+            }
+          }
+        })
+        .catch(report);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [chats, refresh, report]);
+
+  const createChat = useCallback(
+    async (deleteSoon = false) => {
+      setBusy(true);
+      try {
+        const chat = await api.createChat(deleteSoon, workspaceId);
+        await refresh();
+        await openChat(chat);
+        composer.current?.focus();
+      } catch (failure) {
+        report(failure);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [workspaceId, refresh, openChat, report],
+  );
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSidebar(true);
+        setSearching((value) => !value);
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "o"
+      ) {
+        event.preventDefault();
+        setView("chat");
+        void createChat();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [createChat]);
+
+  function changeDraft(value: string) {
+    setDraft(value);
+    if (!currentId) return;
+    setSaving(true);
+    const chatId = currentId;
+    draftQueue.current = draftQueue.current
+      .then(() => api.saveDraft(chatId, value))
+      .catch(report)
+      .finally(() => setSaving(false));
+  }
+
+  async function connect() {
+    setConnecting(true);
+    setProviderError(null);
+    try {
+      const available = await api.models();
+      setModels(available);
+      setSelectedModels((previous) => {
+        const retained = previous.filter((id) =>
+          available.some((model) => model.id === id),
+        );
+        return retained.length
+          ? retained
+          : available.slice(0, 1).map((model) => model.id);
+      });
+      if (!available.length)
+        setProviderError(
+          "Ollama is running, but no local models are installed. Add a model in Ollama, then refresh.",
+        );
+    } catch (failure) {
+      setProviderError(errorText(failure));
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    if (!draft.trim() || busy || running || loading) return;
+    if (!selectedModels.length) {
+      setSettings(true);
+      return;
+    }
+    const content = draft;
+    setBusy(true);
+    setError(null);
+    try {
+      await draftQueue.current;
+      let chatId = currentId;
+      if (!chatId) {
+        const chat = await api.createChat(false, workspaceId);
+        chatId = chat.id;
+        currentRef.current = chatId;
+        setCurrentId(chatId);
+        setChats((previous) => [chat, ...previous]);
+      }
+      const target = chatId;
+      let ready = false;
+      const buffered: RunEvent[] = [];
+      const receive = (update: RunEvent) => {
+        if (!ready) {
+          buffered.push(update);
+          return;
+        }
+        const existing = liveMessages.current.get(update.messageId);
+        if (existing)
+          liveMessages.current.set(
+            update.messageId,
+            applyRunEvent([existing], update)[0],
+          );
+        if (liveMessages.current.size > 16) {
+          for (const [id, message] of liveMessages.current) {
+            if (liveMessages.current.size <= 16) break;
+            if (!["pending", "running"].includes(message.status))
+              liveMessages.current.delete(id);
+          }
+        }
+        if (currentRef.current === target)
+          setMessages((previous) => applyRunEvent(previous, update));
+        if (update.kind === "finished") {
+          if (update.error && update.status !== "cancelled")
+            report(update.error);
+          void refresh().catch(report);
+        }
+      };
+      const started = await api.send(target, content, selectedModels, receive);
+      const placeholders: Message[] = started.runs.map((run, index) => ({
+        id: run.messageId,
+        chatId: target,
+        role: "assistant",
+        content: "",
+        model: run.model,
+        status: "pending",
+        createdAt: Date.now(),
+        sequence: started.user.sequence + index + 1,
+      }));
+      for (const message of placeholders)
+        liveMessages.current.set(message.id, message);
+      for (const update of buffered) {
+        const existing = liveMessages.current.get(update.messageId);
+        if (existing)
+          liveMessages.current.set(
+            update.messageId,
+            applyRunEvent([existing], update)[0],
+          );
+      }
+      if (currentRef.current === target) {
+        setMessages((previous) =>
+          buffered.reduce(applyRunEvent, [
+            ...previous,
+            started.user,
+            ...placeholders,
+          ]),
+        );
+        setDraft("");
+      }
+      ready = true;
+      for (const update of buffered) {
+        if (
+          update.kind === "finished" &&
+          update.error &&
+          update.status !== "cancelled"
+        )
+          report(update.error);
+      }
+      nearBottom.current = true;
+      await refresh();
+    } catch (failure) {
+      report(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function older() {
+    if (!currentId || !messages.length) return;
+    const target = currentId;
+    setLoadingHistory(true);
+    try {
+      const history = await api.messages(target, messages[0].sequence);
+      if (currentRef.current !== target) return;
+      nearBottom.current = false;
+      setMessages((previous) => [...history.items, ...previous]);
+      setMoreHistory(history.hasMore);
+    } catch (failure) {
+      report(failure);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  async function moreChats() {
+    try {
+      const list = await api.listChats(chats.length);
+      setChats((previous) => [...previous, ...list]);
+      setHasMoreChats(list.length === 100);
+    } catch (failure) {
+      report(failure);
+    }
+  }
+
+  async function saveWorkspace(event: FormEvent) {
+    event.preventDefault();
+    if (!createKind) return;
+    setBusy(true);
+    try {
+      const saved = await api.createWorkspace(
+        createKind,
+        workspaceName,
+        instructions,
+      );
+      setWorkspaces((previous) => [...previous, saved]);
+      setWorkspaceId(saved.id);
+      const firstChat = await api.createChat(false, saved.id);
+      await refresh();
+      await openChat(firstChat);
+      setCreateKind(null);
+      setWorkspaceName("");
+      setInstructions("");
+    } catch (failure) {
+      report(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function navigate(next: View) {
+    setView(next);
+    setWorkspaceId(null);
+  }
+
+  async function openWorkspace(item: Workspace) {
+    setBusy(true);
+    try {
+      const chat =
+        chats.find((candidate) => candidate.workspaceId === item.id) ??
+        (await api.createChat(false, item.id));
+      await refresh();
+      await openChat(chat);
+    } catch (failure) {
+      report(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const visibleChats = chats.filter(
+    (chat) =>
+      (!workspaceId || chat.workspaceId === workspaceId) &&
+      chat.title.toLowerCase().includes(query.toLowerCase()),
+  );
+  const permanent = visibleChats.filter((chat) => !chat.expiresAt);
+  const temporary = visibleChats.filter((chat) => chat.expiresAt);
+  const showChat = view === "chat" || !!workspaceId;
+  const viewInfo = views.find((item) => item.id === view)!;
+
+  function chatRows(list: Chat[]) {
+    return list.map((chat) => (
+      <div
+        className={`chat-row ${chat.id === currentId && showChat ? "selected" : ""}`}
+        key={chat.id}
+      >
+        <button
+          className="chat-select"
+          aria-label={`Open chat ${chat.title}`}
+          onClick={() => {
+            if (view !== "chat" && !workspaceId) setView("chat");
+            void openChat(chat);
+          }}
+        >
+          <MessageCircle size={15} />
+          <span>{chat.title}</span>
+          {chat.expiresAt && <small>{daysRemaining(chat.expiresAt)}d</small>}
+        </button>
+        <Menu.Root>
+          <Menu.Trigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="row-menu"
+              aria-label={`Options for ${chat.title}`}
+            >
+              <MoreHorizontal size={15} />
+            </Button>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content className="context-menu" align="end">
+              <Menu.Item
+                className="menu-item"
+                onSelect={() => {
+                  setRenameTitle(chat.title);
+                  setRenameId(chat.id);
+                }}
+              >
+                <Pencil size={14} />
+                Rename
+              </Menu.Item>
+              {chat.expiresAt && (
+                <Menu.Item
+                  className="menu-item"
+                  onSelect={() => {
+                    void api.keep(chat.id).then(refresh).catch(report);
+                  }}
+                >
+                  <ShieldCheck size={14} />
+                  Keep this chat
+                </Menu.Item>
+              )}
+              <Menu.Separator className="menu-separator" />
+              <Menu.Item
+                className="menu-item destructive"
+                onSelect={() => setDeleteId(chat.id)}
+              >
+                <Trash2 size={14} />
+                Delete chat
+              </Menu.Item>
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Root>
+      </div>
+    ));
+  }
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div className="app-shell" data-sidebar={sidebar}>
+        <nav className="rail" aria-label="Workflows">
+          <div className="wordmark" aria-label="Pavane">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M9 25V7h8a6 6 0 0 1 0 12h-4" />
+              <path d="M13 25V11h4a2 2 0 0 1 0 4h-4" />
+            </svg>
+          </div>
+          <div className="rail-nav">
+            {views.map(({ id, label, icon: Icon }) => (
+              <Tip key={id} label={label}>
+                <button
+                  className={`rail-button ${view === id ? "active" : ""}`}
+                  aria-label={label}
+                  aria-current={view === id ? "page" : undefined}
+                  onClick={() => navigate(id)}
+                >
+                  <Icon size={21} strokeWidth={1.6} />
+                </button>
+              </Tip>
+            ))}
+          </div>
+          <Tip label="Connections & settings">
+            <button
+              className="rail-button rail-settings"
+              aria-label="Connections and settings"
+              onClick={() => setSettings(true)}
+            >
+              <Settings2 size={20} strokeWidth={1.6} />
+            </button>
+          </Tip>
+          <div className="profile" title="Local profile">
+            D
+          </div>
+        </nav>
+        {sidebar && (
+          <aside className="sidebar" aria-label="Conversation sidebar">
+            <div className="sidebar-heading">
+              <span>
+                Pavane<span className="alpha-tag">alpha</span>
+              </span>
+              <div className="inline-actions">
+                <Tip label="Search chats · Ctrl+K">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Search chats"
+                    onClick={() => setSearching((value) => !value)}
+                  >
+                    <Search size={17} />
+                  </Button>
+                </Tip>
+                <Tip label="Hide sidebar">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Hide sidebar"
+                    onClick={() => setSidebar(false)}
+                  >
+                    <PanelLeftClose size={17} />
+                  </Button>
+                </Tip>
+              </div>
+            </div>
+            {searching && (
+              <div className="sidebar-search">
+                <Search size={15} />
+                <input
+                  autoFocus
+                  placeholder="Search chat titles…"
+                  aria-label="Search chat titles"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close search"
+                  onClick={() => {
+                    setSearching(false);
+                    setQuery("");
+                  }}
+                >
+                  <X size={14} />
+                </Button>
+              </div>
+            )}
+            <div className="sidebar-actions">
+              <Button
+                variant="primary"
+                aria-label="New chat"
+                onClick={() => {
+                  if (!showChat) setView("chat");
+                  void createChat();
+                }}
+                disabled={busy}
+              >
+                <Plus size={16} />
+                New chat<kbd>Ctrl ⇧ O</kbd>
+              </Button>
+              <Tip label="Saved for 30 days, then removed from this device">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (!showChat) setView("chat");
+                    void createChat(true);
+                  }}
+                  disabled={busy}
+                >
+                  <Clock3 size={16} />
+                  Delete Soon<small>30 days</small>
+                </Button>
+              </Tip>
+            </div>
+            <div className="sidebar-scroll">
+              {workspace && (
+                <button
+                  className="workspace-back"
+                  onClick={() => setWorkspaceId(null)}
+                >
+                  <ChevronLeft size={14} />
+                  {viewInfo.label}
+                </button>
+              )}
+              {view !== "chat" && !workspaceId && (
+                <div className="sidebar-workspace-title">
+                  <viewInfo.icon size={17} />
+                  <span>{viewInfo.label}</span>
+                </div>
+              )}
+              <div className="list-label">
+                {workspace ? workspace.name : "Recent chats"}
+                <span>{permanent.length || ""}</span>
+              </div>
+              {chatRows(permanent)}
+              {permanent.length === 0 && (
+                <p className="sidebar-empty">
+                  {query
+                    ? "No matching chats"
+                    : "Your conversations start here."}
+                </p>
+              )}
+              {hasMoreChats && (
+                <Button
+                  variant="ghost"
+                  size="small"
+                  className="more-chats"
+                  onClick={() => void moreChats()}
+                >
+                  More chats
+                  <ChevronDown size={13} />
+                </Button>
+              )}
+              {temporary.length > 0 && (
+                <div className="temporary-list">
+                  <div className="list-label">
+                    <span>
+                      <Clock3 size={12} />
+                      Deleting soon
+                    </span>
+                    <span>{temporary.length}</span>
+                  </div>
+                  {chatRows(temporary)}
+                </div>
+              )}
+            </div>
+            <button className="device-status" onClick={() => setSettings(true)}>
+              <span className="device-icon">
+                <HardDrive size={16} />
+              </span>
+              <span>
+                On this device
+                <small>{native ? "Local storage" : "Interface preview"}</small>
+              </span>
+              <Settings2 size={15} />
+            </button>
+          </aside>
+        )}
+        <main className="main-pane">
+          <header className="main-header">
+            <div className="header-location">
+              {!sidebar && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Show sidebar"
+                  onClick={() => setSidebar(true)}
+                >
+                  <PanelLeftOpen size={17} />
+                </Button>
+              )}
+              <span>
+                {showChat ? (workspace?.name ?? "Chat") : viewInfo.label}
+              </span>
+              {showChat && (
+                <>
+                  <span className="breadcrumb-divider">/</span>
+                  <span className="header-title">
+                    {current?.title ?? "New chat"}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="header-meta">
+              {showChat && current?.expiresAt ? (
+                <Tip
+                  label={`Expires ${new Date(current.expiresAt).toLocaleString()}`}
+                >
+                  <span className="retention-tag">
+                    <Clock3 size={13} />
+                    {daysRemaining(current.expiresAt)} days left
+                  </span>
+                </Tip>
+              ) : (
+                <span className="local-tag">
+                  <span />
+                  Local
+                </span>
+              )}
+              <Tip label="Provider connections">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Provider connections"
+                  onClick={() => setSettings(true)}
+                >
+                  <Settings2 size={17} />
+                </Button>
+              </Tip>
+            </div>
+          </header>
+          {!native && (
+            <div className="preview-notice">
+              Interface preview · Open the desktop app for SQLite storage and
+              model connections.
+            </div>
+          )}
+          {error && (
+            <div className="error-banner" role="alert">
+              <span>{error}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss error"
+                onClick={() => setError(null)}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          )}
+          {showChat ? (
+            <>
+              <div
+                className={`conversation ${messages.length ? "has-messages" : ""}`}
+                onScroll={(event) => {
+                  const el = event.currentTarget;
+                  nearBottom.current =
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                }}
+                aria-label="Conversation"
+              >
+                {loading ? (
+                  <div className="loading-state" role="status">
+                    <LoaderCircle className="spin" size={22} />
+                    <span>Opening your chat…</span>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="welcome">
+                    <div className="welcome-symbol">
+                      <AudioLines size={30} strokeWidth={1.2} />
+                    </div>
+                    <p className="eyebrow">YOUR MODELS. YOUR SPACE.</p>
+                    <h1>A little space to think.</h1>
+                    <p>Ask a question. Follow an idea. See where it goes.</p>
+                    <div className="suggestion-row">
+                      {[
+                        {
+                          icon: Sparkles,
+                          text: "Explore an idea",
+                          prompt:
+                            "Help me explore an idea. Ask me one question at a time.",
+                        },
+                        {
+                          icon: Pencil,
+                          text: "Write something",
+                          prompt:
+                            "Help me write something. Start by asking what I am working on.",
+                        },
+                        {
+                          icon: Layers3,
+                          text: "See another angle",
+                          prompt:
+                            "Help me look at a decision from different perspectives. Ask me about the decision first.",
+                        },
+                      ].map(({ icon: Icon, text, prompt }) => (
+                        <button
+                          key={text}
+                          onClick={() => {
+                            changeDraft(prompt);
+                            composer.current?.focus();
+                          }}
+                        >
+                          <Icon size={14} />
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="message-list">
+                    {moreHistory && (
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        onClick={() => void older()}
+                        disabled={loadingHistory}
+                      >
+                        {loadingHistory ? (
+                          <LoaderCircle className="spin" size={14} />
+                        ) : (
+                          <ArrowUp size={14} />
+                        )}
+                        Load earlier messages
+                      </Button>
+                    )}
+                    {messages.map((message) => (
+                      <article
+                        key={message.id}
+                        className={`message message-${message.role}`}
+                        aria-label={
+                          message.role === "user"
+                            ? "Your message"
+                            : `Response from ${message.model?.replace("ollama:", "") ?? "model"}`
+                        }
+                      >
+                        <div className="message-label">
+                          {message.role === "user" ? (
+                            <>
+                              <div className="avatar-user">D</div>
+                              <strong>You</strong>
+                            </>
+                          ) : (
+                            <>
+                              <div className="avatar-assistant">
+                                <AudioLines size={15} />
+                              </div>
+                              <strong>
+                                {message.model?.replace("ollama:", "")}
+                              </strong>
+                              <span className="message-provider">Ollama</span>
+                            </>
+                          )}
+                          {["pending", "running"].includes(message.status) && (
+                            <span className="run-status">
+                              <LoaderCircle className="spin" size={11} />
+                              {message.status === "pending"
+                                ? "Queued"
+                                : "Thinking"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="message-content">
+                          {message.content ||
+                            (["pending", "running"].includes(message.status) ? (
+                              <span className="thinking-dots">···</span>
+                            ) : (
+                              <span className="muted">No response text.</span>
+                            ))}
+                        </div>
+                        {["failed", "cancelled", "interrupted"].includes(
+                          message.status,
+                        ) && (
+                          <div className="message-outcome">
+                            {message.status === "interrupted"
+                              ? "Interrupted when Pavane closed. Partial text was saved."
+                              : message.status === "cancelled"
+                                ? "Stopped. Partial text was saved."
+                                : "Response failed. Your message is saved."}
+                          </div>
+                        )}
+                        {message.content && (
+                          <Tip
+                            label={
+                              copied === message.id ? "Copied" : "Copy message"
+                            }
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="copy-message"
+                              aria-label="Copy message"
+                              onClick={() => {
+                                void navigator.clipboard
+                                  .writeText(message.content)
+                                  .then(() => {
+                                    setCopied(message.id);
+                                    window.setTimeout(
+                                      () => setCopied(null),
+                                      1500,
+                                    );
+                                  })
+                                  .catch(report);
+                              }}
+                            >
+                              {copied === message.id ? (
+                                <Check size={14} />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </Button>
+                          </Tip>
+                        )}
+                      </article>
+                    ))}
+                    <div ref={end} />
+                  </div>
+                )}
+              </div>
+              <div className="composer-region">
+                {current?.expiresAt && (
+                  <div className="retention-notice">
+                    <Clock3 size={13} />
+                    <span>Saved for 30 days from creation.</span>
+                    <button
+                      onClick={() => {
+                        void api.keep(current.id).then(refresh).catch(report);
+                      }}
+                    >
+                      Keep this chat
+                    </button>
+                  </div>
+                )}
+                <form
+                  className="composer"
+                  onSubmit={(event) => void send(event)}
+                >
+                  <label className="sr-only" htmlFor="prompt">
+                    Message
+                  </label>
+                  <textarea
+                    ref={composer}
+                    id="prompt"
+                    placeholder="Ask anything…"
+                    value={draft}
+                    onChange={(event) => changeDraft(event.target.value)}
+                    disabled={loading || busy}
+                    maxLength={65536}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        !event.nativeEvent.isComposing
+                      ) {
+                        event.preventDefault();
+                        event.currentTarget.form?.requestSubmit();
+                      }
+                    }}
+                  />
+                  <div className="composer-toolbar">
+                    <div className="inline-actions">
+                      <Tip label="Attachments are planned">
+                        <span tabIndex={0}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Attachments are planned"
+                            disabled
+                          >
+                            <Paperclip size={18} />
+                          </Button>
+                        </span>
+                      </Tip>
+                      <Tip
+                        label={
+                          swarm
+                            ? "Parallel comparison on"
+                            : "Compare model responses"
+                        }
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Compare model responses"
+                          aria-pressed={swarm}
+                          className={swarm ? "accent-button" : ""}
+                          onClick={() => {
+                            setSwarm(!swarm);
+                            setSelectedModels(selectedModels.slice(0, 1));
+                          }}
+                        >
+                          <Layers3 size={17} />
+                        </Button>
+                      </Tip>
+                      {swarm && <span className="composer-mode">Compare</span>}
+                    </div>
+                    <div className="composer-model">
+                      <ModelPicker
+                        models={models}
+                        selected={selectedModels}
+                        onSelect={setSelectedModels}
+                        onConnect={() => setSettings(true)}
+                        swarm={swarm}
+                        onSwarm={setSwarm}
+                      />
+                      {running ? (
+                        <Button
+                          variant="primary"
+                          size="icon"
+                          aria-label="Stop responses"
+                          onClick={() => {
+                            if (currentId)
+                              void api.stop(currentId).catch(report);
+                          }}
+                        >
+                          <Square size={13} fill="currentColor" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="icon"
+                          type="submit"
+                          aria-label="Send message"
+                          disabled={!draft.trim() || busy || loading}
+                        >
+                          {busy ? (
+                            <LoaderCircle className="spin" size={16} />
+                          ) : (
+                            <ArrowUp size={18} />
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </form>
+                <div className="composer-footer">
+                  <span>
+                    {saving
+                      ? "Saving draft…"
+                      : native
+                        ? "Saved on this device"
+                        : "Desktop preview"}
+                  </span>
+                  <span>
+                    Enter to send <span className="footer-dot">·</span> Shift +
+                    Enter for a new line
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : ["projects", "spaces", "bots"].includes(view) ? (
+            <div className="workspace-page">
+              <div className="page-title-row">
+                <div>
+                  <p className="eyebrow">YOUR WORKSPACE</p>
+                  <h1>{viewInfo.label}</h1>
+                  <p>{descriptions[view as keyof typeof descriptions]}</p>
+                </div>
+                <Button
+                  variant="primary"
+                  onClick={() => setCreateKind(view as Workspace["kind"])}
+                >
+                  <Plus size={16} />
+                  New{" "}
+                  {view === "bots"
+                    ? "bot"
+                    : view === "spaces"
+                      ? "space"
+                      : "project"}
+                </Button>
+              </div>
+              {workspaces.filter((item) => item.kind === view).length ? (
+                <div className="workspace-grid">
+                  {workspaces
+                    .filter((item) => item.kind === view)
+                    .map((item) => (
+                      <button
+                        className="workspace-card"
+                        key={item.id}
+                        disabled={busy}
+                        onClick={() => void openWorkspace(item)}
+                      >
+                        <viewInfo.icon size={23} strokeWidth={1.5} />
+                        <h2>{item.name}</h2>
+                        <p>{item.instructions || "Open this workspace"}</p>
+                        <span>
+                          Open workspace <ArrowUp size={13} />
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <div className="workspace-empty">
+                  <viewInfo.icon size={42} strokeWidth={1} />
+                  <h2>
+                    {view === "bots"
+                      ? "Make it your kind of assistant."
+                      : "Give your ideas a home."}
+                  </h2>
+                  <p>
+                    {view === "bots"
+                      ? "Save instructions for the way you like to work."
+                      : "Group conversations and give them shared instructions."}
+                  </p>
+                  <Button
+                    onClick={() => setCreateKind(view as Workspace["kind"])}
+                  >
+                    <Plus size={15} />
+                    Create your first{" "}
+                    {view === "bots"
+                      ? "bot"
+                      : view === "spaces"
+                        ? "space"
+                        : "project"}
+                  </Button>
+                  <small>
+                    {view === "spaces"
+                      ? "Shared context is local. Collaboration comes later."
+                      : view === "bots"
+                        ? "Reusable instructions now. Tools and autonomous swarms come later."
+                        : "Conversations and instructions now. Files and deeper context come later."}
+                  </small>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="studio-empty">
+              <div className="studio-icon">
+                <viewInfo.icon size={34} strokeWidth={1.2} />
+              </div>
+              <span className="badge">Planned</span>
+              <h1>
+                {view === "images"
+                  ? "A space for the visual."
+                  : "Ideas, in motion."}
+              </h1>
+              <p>
+                {view === "images"
+                  ? "Image generation, editing, and a library of everything you make."
+                  : "Video generation, variations, and your own creative library."}
+              </p>
+              <Button onClick={() => setRoadmap(true)}>
+                See what’s next
+                <ArrowDown size={14} />
+              </Button>
+            </div>
+          )}
+        </main>
+        <Modal
+          open={settings}
+          onOpenChange={setSettings}
+          title="Your connections"
+          description="Bring your models into one workspace."
+          wide
+        >
+          <Providers
+            models={models}
+            busy={connecting}
+            onRefresh={() => void connect()}
+            error={providerError}
+          />
+          <div className="settings-bottom">
+            <HardDrive size={15} />
+            <span>
+              Chats stay in SQLite on this device. A selected provider receives
+              the chat context when you send.
+            </span>
+          </div>
+        </Modal>
+        <Modal
+          open={!!deleteId}
+          onOpenChange={(open) => {
+            if (!open) setDeleteId(null);
+          }}
+          title="Delete this chat?"
+          description="This removes the conversation from this device. It cannot be undone."
+        >
+          <div className="dialog-actions">
+            <Button onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!deleteId) return;
+                void api
+                  .delete(deleteId)
+                  .then(async () => {
+                    if (currentRef.current === deleteId) {
+                      ++selection.current;
+                      currentRef.current = null;
+                      setCurrentId(null);
+                      setMessages([]);
+                      setDraft("");
+                      setLoading(true);
+                      const replacement = await api.createChat(
+                        false,
+                        workspaceId,
+                      );
+                      await openChat(replacement);
+                    }
+                    setDeleteId(null);
+                    await refresh();
+                  })
+                  .catch(report);
+              }}
+            >
+              <Trash2 size={15} />
+              Delete chat
+            </Button>
+          </div>
+        </Modal>
+        <Modal
+          open={!!renameId}
+          onOpenChange={(open) => {
+            if (!open) setRenameId(null);
+          }}
+          title="Rename chat"
+          description="Give this conversation a title you can find again."
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renameId) return;
+              void api
+                .rename(renameId, renameTitle)
+                .then(async () => {
+                  setRenameId(null);
+                  await refresh();
+                })
+                .catch(report);
+            }}
+          >
+            <label className="field-label" htmlFor="chat-title">
+              Title
+            </label>
+            <input
+              className="text-input"
+              id="chat-title"
+              value={renameTitle}
+              maxLength={120}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              required
+            />
+            <div className="dialog-actions">
+              <Button type="button" onClick={() => setRenameId(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit">
+                Save title
+              </Button>
+            </div>
+          </form>
+        </Modal>
+        <Modal
+          open={!!createKind}
+          onOpenChange={(open) => {
+            if (!open) setCreateKind(null);
+          }}
+          title={`New ${createKind === "bots" ? "bot" : createKind === "spaces" ? "space" : "project"}`}
+          description="A dedicated place for conversations and shared instructions."
+        >
+          <form onSubmit={(event) => void saveWorkspace(event)}>
+            <label className="field-label" htmlFor="workspace-name">
+              Name
+            </label>
+            <input
+              className="text-input"
+              id="workspace-name"
+              value={workspaceName}
+              maxLength={80}
+              onChange={(event) => setWorkspaceName(event.target.value)}
+              required
+            />
+            <label className="field-label" htmlFor="instructions">
+              Instructions <span>optional</span>
+            </label>
+            <textarea
+              className="text-input instructions-input"
+              id="instructions"
+              placeholder="How should the assistant work here?"
+              value={instructions}
+              maxLength={8192}
+              onChange={(event) => setInstructions(event.target.value)}
+            />
+            <div className="dialog-actions">
+              <Button type="button" onClick={() => setCreateKind(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                disabled={busy || !workspaceName.trim()}
+              >
+                Create
+              </Button>
+            </div>
+          </form>
+        </Modal>
+        <Modal
+          open={roadmap}
+          onOpenChange={setRoadmap}
+          title="Built one workflow at a time"
+          description="What works today, and what comes next."
+        >
+          <ol className="roadmap">
+            <li>
+              <Check size={17} />
+              <div>
+                <strong>Local chat foundation</strong>
+                <p>
+                  SQLite history, Delete Soon, reusable workspaces, and
+                  local-model streaming.
+                </p>
+              </div>
+            </li>
+            <li>
+              <Layers3 size={17} />
+              <div>
+                <strong>Provider subscriptions & orchestration</strong>
+                <p>
+                  Supported subscription bridges, provider-reported limits,
+                  tools, and autonomous swarms. Parallel model comparison is
+                  available now.
+                </p>
+              </div>
+            </li>
+            <li>
+              <Image size={17} />
+              <div>
+                <strong>Images & video</strong>
+                <p>
+                  Generation adapters, media jobs, editing, and a local asset
+                  library.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </Modal>
+      </div>
+    </TooltipProvider>
+  );
+}
