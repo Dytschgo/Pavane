@@ -7,7 +7,7 @@ import { chromium } from "playwright-core";
 
 const root = resolve(import.meta.dirname, "..");
 const data = await mkdtemp(join(tmpdir(), "pavane-codex-"));
-const evidence = join(root, "evidence");
+const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 await mkdir(evidence, { recursive: true });
 const child = spawn(join(root, "target/debug/pavane.exe"), [], {
   cwd: root,

@@ -10,7 +10,7 @@ import { chromium } from "playwright-core";
 // Run only with no Ollama service on 11434; a bind error leaves it untouched.
 const root = resolve(import.meta.dirname, "..");
 const data = await mkdtemp(join(tmpdir(), "pavane-smoke-"));
-const evidence = join(root, "evidence");
+const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 await mkdir(evidence, { recursive: true });
 const requests = [];
 const mock = createServer(async (request, response) => {

@@ -8,6 +8,9 @@ $evidence = Join-Path $repository 'lab-evidence'
 New-Item -ItemType Directory -Path $evidence -Force | Out-Null
 $checks = [System.Collections.Generic.List[string]]::new()
 $devServer = $null
+$previousEvidenceOverride = $env:PAVANE_EVIDENCE_DIR
+$sourceEvidence = Join-Path ([IO.Path]::GetTempPath()) ('pavane-fixture-evidence-' + [Guid]::NewGuid().ToString('N'))
+$env:PAVANE_EVIDENCE_DIR = $sourceEvidence
 
 function Invoke-Check {
     param([string]$Name, [scriptblock]$Action)
@@ -52,9 +55,44 @@ try {
     throw
 } finally {
     if ($devServer -and -not $devServer.HasExited) { Stop-Process -Id $devServer.Id -ErrorAction SilentlyContinue }
-    $sourceEvidence = Join-Path $repository 'evidence'
-    foreach ($name in @('native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png')) {
+    $env:PAVANE_EVIDENCE_DIR = $previousEvidenceOverride
+    $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png')
+    $exportErrors = [System.Collections.Generic.List[string]]::new()
+    $collected = [System.Collections.Generic.List[string]]::new()
+    $collected.Add('verification.json')
+    foreach ($name in $artifacts | Where-Object { $_ -ne 'verification.json' }) {
         $source = Join-Path $sourceEvidence $name
-        if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $evidence $name) }
+        try {
+            if (Test-Path -LiteralPath $source) {
+                Copy-Item -LiteralPath $source -Destination (Join-Path $evidence $name) -Force
+                $collected.Add($name)
+            }
+        } catch { $exportErrors.Add("Could not collect $name.") }
+    }
+    # SSH collects lab-evidence; the retained Windows runner collects this
+    # guest-provided directory. Publish only the same allowlisted synthetic data,
+    # even when a check failed. Never copy auth, databases, binaries or raw logs.
+    $runnerEvidence = $env:AGENTLAB_EVIDENCE_DIR
+    if (-not [string]::IsNullOrWhiteSpace($runnerEvidence)) {
+        try { New-Item -ItemType Directory -Path $runnerEvidence -Force | Out-Null }
+        catch { $exportErrors.Add('Could not create the guest runner evidence directory.') }
+        foreach ($name in $collected) {
+            $source = Join-Path $evidence $name
+            try {
+                if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $runnerEvidence $name) -Force }
+            } catch { $exportErrors.Add("Could not export $name to the guest runner.") }
+        }
+    }
+    if ($exportErrors.Count -gt 0) {
+        $reportPath = Join-Path $evidence 'verification.json'
+        $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+        $report.result = 'failed'
+        $report | Add-Member -NotePropertyName evidenceErrors -NotePropertyValue @($exportErrors) -Force
+        $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+        if (-not [string]::IsNullOrWhiteSpace($runnerEvidence)) {
+            try { Copy-Item -LiteralPath $reportPath -Destination (Join-Path $runnerEvidence 'verification.json') -Force }
+            catch { Write-Warning 'Could not export the evidence failure report.' }
+        }
+        throw 'Synthetic verification evidence could not be fully collected/exported.'
     }
 }
