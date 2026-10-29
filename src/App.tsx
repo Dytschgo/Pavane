@@ -4,13 +4,11 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
   ArrowDown,
   ArrowUp,
-  AudioLines,
   Bot,
   Check,
   ChevronDown,
   ChevronLeft,
   Clock3,
-  Copy,
   Folder,
   HardDrive,
   Image,
@@ -39,6 +37,7 @@ import type {
   Chat,
   Message,
   Model,
+  ProviderStatus,
   RunEvent,
   View,
   Workspace,
@@ -48,6 +47,8 @@ import { Tip, TooltipProvider } from "./components/ui/tooltip";
 import { Modal } from "./components/ui/modal";
 import { ModelPicker } from "./components/model-picker";
 import { Providers } from "./components/providers";
+import { ChatMessage } from "./components/chat-message";
+import { useModelPreferences } from "./lib/model-preferences";
 
 const views: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
@@ -76,8 +77,12 @@ export function App() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
-  const [selectedModels, setSelectedModels] = useState<string[]>([]);
-  const [swarm, setSwarm] = useState(false);
+  const { preferences, update: updatePreferences } = useModelPreferences();
+  const selectedModels = preferences.selected;
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const discoverVersion = useRef(0);
+  const wasRunning = useRef(false);
   const [settings, setSettings] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [providerError, setProviderError] = useState<string | null>(null);
@@ -95,7 +100,6 @@ export function App() {
   const [instructions, setInstructions] = useState("");
   const [roadmap, setRoadmap] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
   const selection = useRef(0);
   const currentRef = useRef<string | null>(null);
   const draftQueue = useRef<Promise<void>>(Promise.resolve());
@@ -312,6 +316,16 @@ export function App() {
 
   const createChat = useCallback(
     async (deleteSoon = false) => {
+      if (
+        current &&
+        messages.length === 0 &&
+        !draft &&
+        Boolean(current.expiresAt) === deleteSoon &&
+        current.workspaceId === workspaceId
+      ) {
+        composer.current?.focus();
+        return;
+      }
       setBusy(true);
       try {
         const chat = await api.createChat(deleteSoon, workspaceId);
@@ -324,7 +338,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [workspaceId, refresh, openChat, report],
+    [workspaceId, refresh, openChat, report, current, messages.length, draft],
   );
 
   useEffect(() => {
@@ -369,36 +383,88 @@ export function App() {
       });
   }
 
-  async function connect() {
+  const connect = useCallback(async () => {
+    const version = ++discoverVersion.current;
     setConnecting(true);
     setProviderError(null);
     try {
-      const available = await api.models();
-      setModels(available);
-      setSelectedModels((previous) => {
-        const retained = previous.filter((id) =>
-          available.some((model) => model.id === id),
-        );
-        return retained.length
-          ? retained
-          : available.slice(0, 1).map((model) => model.id);
-      });
-      if (!available.length)
+      const catalog = await api.catalog();
+      if (version !== discoverVersion.current) return;
+      setModels(catalog.models);
+      setProviders(catalog.providers);
+      updatePreferences((previous) =>
+        previous.selected.length
+          ? previous
+          : {
+              ...previous,
+              selected: [
+                catalog.models.find((model) => model.isDefault)?.id ??
+                  catalog.models[0]?.id,
+              ].filter((id): id is string => !!id),
+            },
+      );
+      if (!catalog.models.length)
         setProviderError(
-          "Ollama is running, but no local models are installed. Add a model in Ollama, then refresh.",
+          catalog.providers.find((provider) => provider.id === "codex")
+            ?.detail ?? "Connect a model to get started.",
         );
     } catch (failure) {
-      setProviderError(errorText(failure));
+      if (version === discoverVersion.current)
+        setProviderError(errorText(failure));
     } finally {
-      setConnecting(false);
+      if (version === discoverVersion.current) setConnecting(false);
     }
-  }
+  }, [updatePreferences]);
+
+  useEffect(() => {
+    if (native) void connect();
+  }, [connect]);
+
+  useEffect(() => {
+    if (
+      wasRunning.current &&
+      !running &&
+      selectedModels.some((id) => id.startsWith("codex:"))
+    )
+      void connect();
+    wasRunning.current = running;
+  }, [running, selectedModels, connect]);
+
+  useEffect(() => {
+    if (settings && native) void connect();
+  }, [settings, connect]);
+
+  useEffect(() => {
+    if (!loading && currentId && document.activeElement === document.body)
+      composer.current?.focus();
+  }, [loading, currentId]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && /^[1-9]$/.test(event.key)) {
+        const id = preferences.favourites[Number(event.key) - 1];
+        if (id && models.some((model) => model.id === id)) {
+          event.preventDefault();
+          updatePreferences((previous) => ({
+            ...previous,
+            selected: [id],
+            compare: false,
+          }));
+        }
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [preferences.favourites, models, updatePreferences]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (!draft.trim() || busy || running || loading) return;
-    if (!selectedModels.length) {
-      setSettings(true);
+    if (!draft.trim() || busy || running || loading || connecting) return;
+    if (
+      !selectedModels.length ||
+      selectedModels.some((id) => !models.some((model) => model.id === id))
+    ) {
+      setPickerOpen(true);
       return;
     }
     const content = draft;
@@ -444,7 +510,35 @@ export function App() {
           void refresh().catch(report);
         }
       };
-      const started = await api.send(target, content, selectedModels, receive);
+      const started = await api.send(
+        target,
+        content,
+        selectedModels,
+        receive,
+        Object.fromEntries(
+          selectedModels.map((id) => {
+            const model = models.find((model) => model.id === id)!;
+            const saved = preferences.options[id];
+            return [
+              id,
+              {
+                reasoningEffort:
+                  saved?.reasoningEffort &&
+                  model.reasoningEfforts?.includes(saved.reasoningEffort)
+                    ? saved.reasoningEffort
+                    : (model.defaultReasoningEffort ?? null),
+                serviceTier:
+                  saved?.serviceTier &&
+                  model.serviceTiers?.some(
+                    (tier) => tier.id === saved.serviceTier,
+                  )
+                    ? saved.serviceTier
+                    : "default",
+              },
+            ];
+          }),
+        ),
+      );
       draftCache.current.delete(target);
       const placeholders: Message[] = started.runs.map((run, index) => ({
         id: run.messageId,
@@ -491,6 +585,7 @@ export function App() {
       report(failure);
     } finally {
       setBusy(false);
+      requestAnimationFrame(() => composer.current?.focus());
     }
   }
 
@@ -873,7 +968,9 @@ export function App() {
               ) : (
                 <span className="local-tag">
                   <span />
-                  Local
+                  {selectedModels.some((id) => id.startsWith("codex:"))
+                    ? "Codex · cloud"
+                    : "Local"}
                 </span>
               )}
               <Tip label="Provider connections">
@@ -925,12 +1022,7 @@ export function App() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="welcome">
-                    <div className="welcome-symbol">
-                      <AudioLines size={30} strokeWidth={1.2} />
-                    </div>
-                    <p className="eyebrow">YOUR MODELS. YOUR SPACE.</p>
-                    <h1>A little space to think.</h1>
-                    <p>Ask a question. Follow an idea. See where it goes.</p>
+                    <h1>What’s on your mind?</h1>
                     <div className="suggestion-row">
                       {[
                         {
@@ -984,93 +1076,12 @@ export function App() {
                       </Button>
                     )}
                     {messages.map((message) => (
-                      <article
+                      <ChatMessage
                         key={message.id}
-                        className={`message message-${message.role}`}
-                        aria-label={
-                          message.role === "user"
-                            ? "Your message"
-                            : `Response from ${message.model?.replace("ollama:", "") ?? "model"}`
-                        }
-                      >
-                        <div className="message-label">
-                          {message.role === "user" ? (
-                            <>
-                              <div className="avatar-user">D</div>
-                              <strong>You</strong>
-                            </>
-                          ) : (
-                            <>
-                              <div className="avatar-assistant">
-                                <AudioLines size={15} />
-                              </div>
-                              <strong>
-                                {message.model?.replace("ollama:", "")}
-                              </strong>
-                              <span className="message-provider">Ollama</span>
-                            </>
-                          )}
-                          {["pending", "running"].includes(message.status) && (
-                            <span className="run-status">
-                              <LoaderCircle className="spin" size={11} />
-                              {message.status === "pending"
-                                ? "Queued"
-                                : "Thinking"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="message-content">
-                          {message.content ||
-                            (["pending", "running"].includes(message.status) ? (
-                              <span className="thinking-dots">···</span>
-                            ) : (
-                              <span className="muted">No response text.</span>
-                            ))}
-                        </div>
-                        {["failed", "cancelled", "interrupted"].includes(
-                          message.status,
-                        ) && (
-                          <div className="message-outcome">
-                            {message.status === "interrupted"
-                              ? "Interrupted when Pavane closed. Partial text was saved."
-                              : message.status === "cancelled"
-                                ? "Stopped. Partial text was saved."
-                                : "Response failed. Your message is saved."}
-                          </div>
-                        )}
-                        {message.content && (
-                          <Tip
-                            label={
-                              copied === message.id ? "Copied" : "Copy message"
-                            }
-                          >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="copy-message"
-                              aria-label="Copy message"
-                              onClick={() => {
-                                void navigator.clipboard
-                                  .writeText(message.content)
-                                  .then(() => {
-                                    setCopied(message.id);
-                                    window.setTimeout(
-                                      () => setCopied(null),
-                                      1500,
-                                    );
-                                  })
-                                  .catch(report);
-                              }}
-                            >
-                              {copied === message.id ? (
-                                <Check size={14} />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </Button>
-                          </Tip>
-                        )}
-                      </article>
+                        message={message}
+                        models={models}
+                        onError={report}
+                      />
                     ))}
                     <div ref={end} />
                   </div>
@@ -1100,13 +1111,24 @@ export function App() {
                   <textarea
                     ref={composer}
                     id="prompt"
-                    placeholder="Ask anything…"
+                    rows={2}
+                    placeholder={
+                      running
+                        ? "Write your next message… Esc to stop"
+                        : "Ask anything…"
+                    }
                     value={draft}
                     onChange={(event) => changeDraft(event.target.value)}
                     disabled={loading || busy || (native && !currentId)}
                     maxLength={65536}
                     onKeyDown={(event) => {
+                      if (event.key === "Escape" && running && currentId) {
+                        event.preventDefault();
+                        void api.stop(currentId).catch(report);
+                        return;
+                      }
                       if (
+                        !running &&
                         event.key === "Enter" &&
                         !event.shiftKey &&
                         !event.nativeEvent.isComposing
@@ -1130,37 +1152,17 @@ export function App() {
                           </Button>
                         </span>
                       </Tip>
-                      <Tip
-                        label={
-                          swarm
-                            ? "Parallel comparison on"
-                            : "Compare model responses"
-                        }
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Compare model responses"
-                          aria-pressed={swarm}
-                          className={swarm ? "accent-button" : ""}
-                          onClick={() => {
-                            setSwarm(!swarm);
-                            setSelectedModels(selectedModels.slice(0, 1));
-                          }}
-                        >
-                          <Layers3 size={17} />
-                        </Button>
-                      </Tip>
-                      {swarm && <span className="composer-mode">Compare</span>}
                     </div>
                     <div className="composer-model">
                       <ModelPicker
                         models={models}
-                        selected={selectedModels}
-                        onSelect={setSelectedModels}
+                        preferences={preferences}
+                        update={updatePreferences}
+                        open={pickerOpen}
+                        onOpenChange={setPickerOpen}
+                        connecting={connecting}
+                        onRefresh={() => void connect()}
                         onConnect={() => setSettings(true)}
-                        swarm={swarm}
-                        onSwarm={setSwarm}
                       />
                       {running ? (
                         <Button
@@ -1179,13 +1181,17 @@ export function App() {
                           variant="primary"
                           size="icon"
                           type="submit"
-                          aria-label="Send message"
-                          disabled={!draft.trim() || busy || loading}
+                          aria-label={
+                            connecting ? "Connecting models" : "Send message"
+                          }
+                          disabled={
+                            !draft.trim() || busy || loading || connecting
+                          }
                         >
-                          {busy ? (
+                          {busy || connecting ? (
                             <LoaderCircle className="spin" size={16} />
                           ) : (
-                            <ArrowUp size={18} />
+                            <ArrowUp size={20} />
                           )}
                         </Button>
                       )}
@@ -1316,6 +1322,7 @@ export function App() {
         >
           <Providers
             models={models}
+            providers={providers}
             busy={connecting}
             onRefresh={() => void connect()}
             error={providerError}

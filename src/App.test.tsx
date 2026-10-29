@@ -18,6 +18,7 @@ const mocked = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   workspaces: vi.fn(),
   models: vi.fn(),
+  catalog: vi.fn(),
   rename: vi.fn(),
   keep: vi.fn(),
   delete: vi.fn(),
@@ -50,8 +51,89 @@ beforeEach(() => {
   mocked.saveDraft.mockResolvedValue(undefined);
   mocked.workspaces.mockResolvedValue([]);
   mocked.createChat.mockResolvedValue(second);
+  mocked.catalog.mockResolvedValue({ models: [], providers: [] });
 });
 afterEach(cleanup);
+
+it("waits for startup discovery without losing the draft, then sends the default Codex model with explicit settings", async () => {
+  const catalog = {
+    models: [
+      {
+        id: "codex:sol",
+        name: "Sol",
+        provider: "Codex",
+        isDefault: true,
+        reasoningEfforts: ["low", "high"],
+        defaultReasoningEffort: "low",
+        serviceTiers: [],
+      },
+    ],
+    providers: [
+      {
+        id: "codex",
+        name: "Codex",
+        state: "connected",
+        detail: "Connected",
+        limits: [],
+      },
+    ],
+  };
+  let finishDiscovery: (value: typeof catalog) => void = () => {};
+  mocked.catalog.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishDiscovery = resolve;
+      }),
+  );
+  mocked.send.mockResolvedValue({
+    user: {
+      id: "user",
+      chatId: "first",
+      role: "user",
+      content: "Hello",
+      model: null,
+      status: "complete",
+      createdAt: 1,
+      sequence: 1,
+    },
+    runs: [],
+  });
+  render(<App />);
+  const input = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.change(input, { target: { value: "Hello" } });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  expect(mocked.send).not.toHaveBeenCalled();
+  expect(input).toHaveValue("Hello");
+  expect(
+    screen.getByRole("button", { name: "Connecting models" }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole("combobox", { name: "Search models" }),
+  ).not.toBeInTheDocument();
+  await act(async () => finishDiscovery(catalog));
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await waitFor(() =>
+    expect(mocked.send).toHaveBeenCalledWith(
+      "first",
+      "Hello",
+      ["codex:sol"],
+      expect.any(Function),
+      { "codex:sol": { reasoningEffort: "low", serviceTier: "default" } },
+    ),
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it("reuses a pristine current chat instead of accumulating empty conversations", async () => {
+  render(<App />);
+  const input = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+  expect(mocked.createChat).not.toHaveBeenCalled();
+  expect(input).toHaveFocus();
+});
 
 describe("durable draft interaction", () => {
   it("acknowledges the latest queued save rather than an earlier write", async () => {

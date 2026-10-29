@@ -1,90 +1,159 @@
 import {
-  ArrowUpRight,
   Check,
   Cpu,
   LoaderCircle,
   RefreshCw,
+  SquareTerminal,
 } from "lucide-react";
-import type { Model } from "../lib/types";
+import type { Model, ProviderStatus } from "../lib/types";
 import { Button } from "./ui/button";
-
-const planned = [
-  { name: "OpenAI", mark: "O", detail: "Codex subscription bridge" },
-  { name: "Anthropic", mark: "A", detail: "Claude adapter" },
-  { name: "Google", mark: "G", detail: "Gemini adapter" },
-  { name: "xAI", mark: "x", detail: "Grok adapter" },
-];
 
 export function Providers({
   models,
+  providers,
   busy,
   onRefresh,
   error,
 }: {
   models: Model[];
+  providers: ProviderStatus[];
   busy: boolean;
   onRefresh: () => void;
   error: string | null;
 }) {
   return (
     <div className="provider-settings">
-      <div className="provider-row">
-        <div className="provider-mark">
-          <Cpu size={22} />
-        </div>
-        <div className="provider-info">
-          <strong>Ollama</strong>
-          <span>Local models · 127.0.0.1:11434</span>
-        </div>
-        <Button size="small" onClick={onRefresh} disabled={busy}>
+      <div className="connection-intro">
+        <span>
+          {models.length
+            ? `${models.length} models ready`
+            : busy
+              ? "Finding your models…"
+              : "Your model connections"}
+        </span>
+        <Button
+          variant="ghost"
+          size="small"
+          onClick={onRefresh}
+          disabled={busy}
+        >
           {busy ? (
-            <LoaderCircle className="spin" size={15} />
-          ) : models.length ? (
-            <RefreshCw size={15} />
+            <LoaderCircle className="spin" size={14} />
           ) : (
-            <PlusIcon />
+            <RefreshCw size={14} />
           )}
-          <span>
-            {busy ? "Checking" : models.length ? "Refresh" : "Connect"}
-          </span>
+          Refresh
         </Button>
       </div>
-      {models.length > 0 && (
-        <div className="provider-connected">
-          <Check size={14} />
-          {models.length} {models.length === 1 ? "model" : "models"} available{" "}
-          <span>Local usage · no subscription quota</span>
-        </div>
-      )}
+      {[
+        { id: "codex", name: "Codex", icon: SquareTerminal },
+        { id: "ollama", name: "Ollama", icon: Cpu },
+      ].map(({ id, name, icon: Icon }) => {
+        const status = providers.find((provider) => provider.id === id);
+        const connected = status?.state === "connected";
+        return (
+          <div className="connection" key={id}>
+            <div className="provider-row">
+              <div className={`provider-mark provider-${id}`}>
+                <Icon size={21} />
+              </div>
+              <div className="provider-info">
+                <strong>{name}</strong>
+                <span>
+                  {busy && !status
+                    ? "Checking connection…"
+                    : (status?.detail ??
+                      (id === "codex"
+                        ? "Uses your existing Codex CLI subscription login"
+                        : "Local models on this device"))}
+                </span>
+              </div>
+              <span
+                className={`connection-badge ${connected ? "connected" : ""}`}
+              >
+                {connected ? (
+                  <>
+                    <Check size={12} />
+                    Connected
+                  </>
+                ) : busy ? (
+                  "Checking"
+                ) : status?.state === "signedOut" ? (
+                  "Sign in needed"
+                ) : (
+                  "Not connected"
+                )}
+              </span>
+            </div>
+            {!!status?.limits.length && (
+              <div className="usage-windows">
+                {status.limits.map((window, index) => (
+                  <div className="usage-window" key={index}>
+                    <div>
+                      <span>
+                        {window.windowMinutes
+                          ? window.windowMinutes >= 1440
+                            ? `${Math.round(window.windowMinutes / 1440)}-day usage`
+                            : `${Math.round(window.windowMinutes / 60)}-hour usage`
+                          : window.label}
+                      </span>
+                      <strong>{Math.round(window.usedPercent)}%</strong>
+                    </div>
+                    <meter
+                      min={0}
+                      max={100}
+                      value={window.usedPercent}
+                      aria-label={window.label}
+                    />
+                    {window.resetsAt && (
+                      <small>
+                        Resets{" "}
+                        {new Date(window.resetsAt * 1000).toLocaleString(
+                          undefined,
+                          {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </small>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {id === "codex" && status?.state === "signedOut" && (
+              <p className="connection-help">
+                Sign in once with <code>codex login</code>, then refresh. Pavane
+                keeps your credentials with Codex.
+              </p>
+            )}
+          </div>
+        );
+      })}
       {error && (
         <p role="status" className="field-error">
           {error}
         </p>
       )}
       <div className="settings-divider">
-        <span>UP NEXT</span>
+        <span>MORE PROVIDERS</span>
       </div>
-      {planned.map((provider) => (
-        <div className="provider-row" key={provider.name}>
+      {[
+        { name: "Anthropic", mark: "A" },
+        { name: "Google", mark: "G" },
+        { name: "xAI", mark: "x" },
+      ].map((provider) => (
+        <div className="provider-row planned-provider" key={provider.name}>
           <div className="provider-mark">{provider.mark}</div>
           <div className="provider-info">
             <strong>{provider.name}</strong>
-            <span>{provider.detail}</span>
+            <span>Subscription adapter planned</span>
           </div>
           <span className="badge">Planned</span>
         </div>
       ))}
-      <div className="settings-note">
-        <ArrowUpRight size={16} />
-        <p>
-          Subscriptions and API billing are separate. Connections and limits
-          will appear when the provider supports them.
-        </p>
-      </div>
     </div>
   );
-}
-
-function PlusIcon() {
-  return <span aria-hidden="true">+</span>;
 }

@@ -24,4 +24,13 @@
   --success: light-dark(oklch(45% 0.09 155), oklch(72% 0.08 155));
   --radius: 7px;
   --title-size: clamp(25px, 1.3rem + 1vw, 34px);
+  --chat-width: 760px;
+  --composer-surface: light-dark(oklch(99% 0 none), oklch(21.5% 0.003 285));
+  --composer-border: light-dark(oklch(87% 0 none), oklch(29% 0.003 285));
+}
+:root {
+  --font-mono:
+    "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --code-bg: light-dark(oklch(96.5% 0 none), oklch(15.5% 0.003 285));
+  --favourite: oklch(78% 0.14 75);
 }

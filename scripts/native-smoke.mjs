@@ -67,6 +67,7 @@ async function launch() {
     env: {
       ...process.env,
       PAVANE_DATA_DIR: data,
+      WEBVIEW2_USER_DATA_FOLDER: join(data, "webview"),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9422",
     },
     stdio: "ignore",
@@ -104,17 +105,57 @@ const checks = [];
 try {
   let page = await launch();
   await page.screenshot({ path: join(evidence, "native-empty.png") });
+  await page.getByRole("button", { name: /Change model/ }).click();
   await page
-    .getByRole("button", { name: "Provider connections", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await page.getByText("2 models available", { exact: false }).waitFor();
-  await page.getByRole("button", { name: "Close dialog" }).click();
+    .getByRole("option", { name: /smoke-a/ })
+    .waitFor({ timeout: 45000 });
+  await page.getByRole("option", { name: /smoke-a/ }).click();
   await page.getByRole("button", { name: "Delete Soon", exact: false }).click();
   await page.getByText("30 days left").waitFor();
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("Hello from the native smoke test");
+  await page.screenshot({
+    animations: "disabled",
+    path: join(evidence, "native-composer-focused.png"),
+  });
+  const composerLayout = await page.evaluate(() => {
+    const editor = document
+      .querySelector(".composer textarea")
+      .getBoundingClientRect();
+    const toolbar = document
+      .querySelector(".composer-toolbar")
+      .getBoundingClientRect();
+    const shell = document.querySelector(".composer").getBoundingClientRect();
+    return {
+      separated: editor.bottom <= toolbar.top,
+      toolbarInside: toolbar.bottom <= shell.bottom,
+      noPageOverflow: document.documentElement.scrollWidth <= innerWidth,
+    };
+  });
+  assert.deepEqual(composerLayout, {
+    separated: true,
+    toolbarInside: true,
+    noPageOverflow: true,
+  });
+  const beforePicker = requests.length;
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("combobox", { name: "Search models" }).waitFor();
+  assert.equal(
+    requests.length,
+    beforePicker,
+    "Choosing a model must not submit the draft",
+  );
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await page
+      .getByRole("textbox", { name: "Message", exact: true })
+      .inputValue(),
+    "Hello from the native smoke test",
+  );
+  checks.push(
+    "focused composer has separate input/toolbar, and model selection preserves the unsent draft",
+  );
   await page.getByRole("button", { name: "Send message", exact: true }).click();
   await page
     .getByText("Grüezi 🦀. A persisted response from smoke-a.", { exact: true })
@@ -126,13 +167,9 @@ try {
     "native IPC, model discovery, UTF-8 streaming, persisted response, Delete Soon",
   );
   await page.screenshot({ path: join(evidence, "native-chat.png") });
-  await page
-    .getByRole("button", { name: "Compare model responses", exact: true })
-    .click();
-  await page.getByRole("button", { name: "smoke-a", exact: false }).click();
-  await page
-    .getByRole("menuitemcheckbox", { name: "smoke-b", exact: false })
-    .click();
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("button", { name: /Compare models/ }).click();
+  await page.getByRole("option", { name: /smoke-b/ }).click();
   await page.keyboard.press("Escape");
   await page
     .getByRole("textbox", { name: "Message", exact: true })
@@ -212,13 +249,6 @@ try {
     .fill("Use short sentences.");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await page.getByRole("button", { name: "New chat", exact: true }).click();
-  // Model connections intentionally need reconnect after app reload in V1.
-  await page
-    .getByRole("button", { name: "Provider connections", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await page.getByText("2 models available", { exact: false }).waitFor();
-  await page.getByRole("button", { name: "Close dialog" }).click();
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("A workspace question");
@@ -269,6 +299,36 @@ try {
     true,
   );
   await page.screenshot({ path: join(evidence, "native-narrow.png") });
+  const narrowPrompt = page.getByRole("textbox", {
+    name: "Message",
+    exact: true,
+  });
+  const previousDraft = await narrowPrompt.inputValue();
+  await narrowPrompt.fill(
+    Array(30).fill("A longer thought on its own line.").join("\n"),
+  );
+  await page.screenshot({
+    animations: "disabled",
+    path: join(evidence, "native-composer-multiline.png"),
+  });
+  assert.equal(
+    await page.evaluate(() => {
+      const input = document
+        .querySelector(".composer textarea")
+        .getBoundingClientRect();
+      const send = document
+        .querySelector(".composer [type='submit']")
+        .getBoundingClientRect();
+      return (
+        input.bottom <= send.top &&
+        send.bottom <= innerHeight &&
+        document.documentElement.scrollWidth <= innerWidth
+      );
+    }),
+    true,
+    "Long drafts must leave the send action visible and separate from text",
+  );
+  await narrowPrompt.fill(previousDraft);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page
     .getByRole("button", { name: "Provider connections", exact: true })

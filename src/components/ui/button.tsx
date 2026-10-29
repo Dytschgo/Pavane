@@ -19,10 +19,12 @@ export function Button({
   className,
   variant,
   size,
+  type = "button",
   ...props
 }: ComponentProps<"button"> & VariantProps<typeof variants>) {
   return (
     <button
+      type={type}
       className={clsx(variants({ variant, size }), className)}
       {...props}
     />

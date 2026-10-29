@@ -29,6 +29,31 @@ export interface Model {
   id: string;
   name: string;
   provider: string;
+  reasoningEfforts?: string[];
+  defaultReasoningEffort?: string | null;
+  serviceTiers?: { id: string; name: string; description: string }[];
+  isDefault?: boolean;
+  description?: string;
+}
+export interface ModelOptions {
+  reasoningEffort?: string | null;
+  serviceTier?: string | null;
+}
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  state: string;
+  detail: string;
+  limits: {
+    label: string;
+    usedPercent: number;
+    resetsAt: number | null;
+    windowMinutes: number | null;
+  }[];
+}
+export interface Catalog {
+  models: Model[];
+  providers: ProviderStatus[];
 }
 export interface Run {
   id: string;

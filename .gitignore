@@ -9,4 +9,5 @@ target/
 *.tsbuildinfo
 src-tauri/gen/
 evidence/
+lab-evidence/
 .DS_Store

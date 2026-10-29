@@ -6,6 +6,8 @@ import type {
   RunEvent,
   TurnStarted,
   Workspace,
+  Catalog,
+  ModelOptions,
 } from "./types";
 
 export const native = isTauri();
@@ -42,11 +44,14 @@ export const api = {
   createWorkspace: (kind: string, name: string, instructions: string) =>
     call<Workspace>("create_workspace", { kind, name, instructions }),
   models: () => call<Model[]>("discover_models"),
+  openExternal: (url: string) => call<void>("open_external_url", { url }),
+  catalog: () => call<Catalog>("discover_providers"),
   send: (
     chatId: string,
     content: string,
     models: string[],
     receive: (event: RunEvent) => void,
+    options: Record<string, ModelOptions> = {},
   ) => {
     const onEvent = new Channel<RunEvent>();
     onEvent.onmessage = receive;
@@ -55,6 +60,7 @@ export const api = {
       content,
       models,
       onEvent,
+      options,
     });
   },
 };
