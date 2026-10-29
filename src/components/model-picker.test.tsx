@@ -94,14 +94,13 @@ it("clears a completed search and highlights the chosen model when reopened", as
 it("keeps search scoped to the selected provider and offers filter recovery", async () => {
   const user = userEvent.setup();
   render(<Harness />);
-  await user.click(
-    await screen.findByRole("button", { name: "Ollama", exact: true }),
-  );
+  await user.click(await screen.findByRole("button", { name: "Ollama" }));
   await user.type(screen.getByRole("combobox"), "Codex");
   expect(screen.queryAllByRole("option")).toHaveLength(0);
-  expect(
-    screen.getByRole("button", { name: "Ollama", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Ollama" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
   await user.click(screen.getByRole("button", { name: "Clear filters" }));
   expect(screen.getAllByRole("option")).toHaveLength(2);
   expect(screen.getByRole("combobox")).toHaveValue("");
