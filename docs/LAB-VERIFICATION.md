@@ -1,8 +1,16 @@
 # Pavane Windows lab run
 
-New source work (`PV-PERF-002`) is not covered by the old acceptance below. It repairs a measured history-reading jump and adds a long-stream/history fixture. Local testing/builds are now prohibited while Dylan works; the next binary must come from CI. LabManager is preparing 2.4.8 and holds the next runner turn/runtime swap; no new adapter or dispatch calls until its explicit final handoff. The last verified executable remains the older candidate below until new CI and native lab checks pass.
+## Latest CI-artifact acceptance — 30 October, 20:40 UTC
 
-## Current acceptance — 30 October, 18:55 UTC
+Installed LabManager2.4.8 (`20261030-212752`) adapter SHA-256 `57BE984264B6261287A816131016420550B8D87D19FDFFEA40923EDB4A3F7926` verified. CI run41122549470 passed PR head`edaeea0efc0ee101dd4b5dbc9ef43d9562dc76ab`; actual build merge`fc941e1f07213238f2ad65db93e8ffa1e373d4c0` preserved separately. CI artifact13010675758 digest,56source hashes and executable hash were checked without local execution. Fresh probe/preflight then admitted new job`job-0bf3c0aad1724a96afb50a99360fa7de`, reservation`reservation-fcd8c0de394548dcbe296ba976c1010a`, request`pavane-edaeea0-ui-windows-001`; exact verifier invocation,desktop1800s,noLiveCodex.
+
+Retained run`20261030T203335Z-9bd856deb443` passed/exit0;12native workflows,two standalone checks,long-stream typing/full-response+draft retention and history-anchor budget passed. Four reports+11PNGs retained/inspected; no guest Rust build/tests/tool installation/live inference. CommandOutcome correctly reported exited-zero while cleanup was false; get_job_result returned exact list_run_artifacts/read_run_artifact route. After preserving evidence root completed disposal`9b2115c418724e1da3240fcb848a5487` at20:38:53.329717Z,Boot9→10,restart1/cleanup1, task/observer/workspace acknowledged. Original manager unknown/exit0 preserved,cleanuptrue/aborted-by-reset,reservation retired. Private result remains missing for this legacy route; exact retained evidence remains accessible. Fresh20:40:40Zprobe ready+desktop/status available,no reservation or desktop fence. No Pavane run/recovery is in flight.
+
+This is actual native acceptance of the pagination source repair, not acceptance of the subsequent viewport-follow assertion. Its next CI/lab result remains pending. Local tests/builds/UI remain prohibited; stage only newly verified CI inputs and use fresh readiness/ownership. [Measured scope](PERFORMANCE.md).
+
+The next viewport-follow assertion (`PV-CHAT-FOLLOW-001`) is not covered by this acceptance. Local testing/builds remain prohibited while Dylan works; the next candidate must come from CI. LabManager2.4.8 maintenance is settled and no Pavane operation remains active. Fresh probe/preflight and distinct ownership are required for future dispatch. Earlier sections below retain historical setup and acceptance states.
+
+## Earlier prebuilt acceptance — 30 October, 18:55 UTC
 
 Actual prebuilt UI run `20261030T185029Z-544145d70218` passed, exit 0, 54.3046 seconds guest execution / 82.2780 seconds overall. Candidate `3f82cde87d64a8aac962cd0ffba8ded2a278e195`; job `job-bd50e805a2424c37971c1c2c9195df42`, reservation `reservation-12bb972756d243d3baa76a1d1c66bcc7`, request `pavane-3f82cde-ui-windows-001`. Exact core invocation unchanged. The guest verified 55 source/harness/asset files plus the executable against the prepared manifest, restored locked dependencies with existing Node 22.23.3/pnpm 11.25.0 and disabled install scripts/package-manager downloads, then passed 12 native workflows and two release checks. All 12 synthetic exports were retained, including nine screenshots inspected by root. No guest Rust build/tests or live Codex inference. See [full evidence and limitations](VERIFICATION.md#prebuilt-ui-acceptance-on-the-lab--30-october-2026).
 
@@ -10,7 +18,7 @@ Supported administrative disposal `f4071f7e110b49efa56c0e0a5f8aa042`, request `d
 
 An intermediate prebuilt attempt at `4f03175`, job `job-31272f729adb4462a3222405ce1998d4`, failed before UI because the verifier incorrectly retained the build's Node-24 requirement. Root preserved its report and completed supported disposal `76f75a3cfeb1449d854ff31175d0756a` at 18:43:55Z, BootId 7→8. The corrected UI-only runtime was then proven locally on the exact guest versions before the successful distinct submission. Historical sections below are chronology.
 
-## Latest disposition — 30 October, 18:27 UTC
+## Earlier disposition — 30 October, 18:27 UTC
 
 Installed LabManager 2.4.7 (`20261030-192334`) repairs the nested WinPS native-stderr/completion seam and BOM-aware artifact decoding. Root verified adapter SHA-256 `CBECCE29CB23F5BE05EEF01380600FAA4416C303CCA0BFB636A6D046F2A06BD4` and status at 18:29:44Z: available, no reservation. Later sections preserve historical gates and are not the current runtime state.
 

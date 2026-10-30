@@ -103,7 +103,12 @@ const result = {
     historyTurns,
     historyOnly,
   },
-  budgets: { typingP95Ms: 120, typingMaxMs: 500, historyAnchorShiftPx: 3 },
+  budgets: {
+    typingP95Ms: 120,
+    typingMaxMs: 500,
+    historyAnchorShiftPx: 3,
+    followGapPx: 24,
+  },
   checks: [],
   result: "running",
 };
@@ -162,6 +167,14 @@ try {
       .getByRole("button", { name: "Stop responses" })
       .waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await page.waitForFunction(() => {
+      const input = document.querySelector("#prompt");
+      return (
+        input &&
+        !input.disabled &&
+        document.querySelectorAll("article.message").length === 0
+      );
+    });
     const session = await page.context().newCDPSession(page);
     await session.send("Performance.enable");
     const before = await session.send("Performance.getMetrics");
@@ -198,6 +211,17 @@ try {
           );
       });
     });
+    const initialGap = await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      return Math.max(
+        0,
+        area.scrollHeight - area.scrollTop - area.clientHeight,
+      );
+    });
+    assert.ok(
+      initialGap <= result.budgets.followGapPx,
+      "Fixture must begin pinned to latest",
+    );
     await editor.fill("LONG_STREAM");
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -221,6 +245,28 @@ try {
       .getByRole("button", { name: "Stop responses" })
       .waitFor({ state: "hidden" });
     assert.equal(await editor.inputValue(), "a".repeat(keys.length));
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    // The scenario types only in the composer; it sends no wheel, page-up or
+    // conversation-scroll input. A pinned reply should still end in view.
+    const follow = await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      return {
+        gapPx: Math.max(
+          0,
+          area.scrollHeight - area.scrollTop - area.clientHeight,
+        ),
+        scrollTop: area.scrollTop,
+        scrollHeight: area.scrollHeight,
+        viewportHeight: area.clientHeight,
+        composerFocused:
+          document.activeElement === document.querySelector("#prompt"),
+      };
+    });
     const measurements = await page.evaluate(() => {
       window.__pavanePerf.measuring = false;
       return window.__pavanePerf;
@@ -245,6 +291,7 @@ try {
       scriptSeconds: metric("ScriptDuration"),
       layoutSeconds: metric("LayoutDuration"),
       taskSeconds: metric("TaskDuration"),
+      follow: { initialGapPx: initialGap, ...follow },
     };
     await report();
     console.log(
@@ -399,6 +446,8 @@ try {
     violations.push("stream typing p95");
   if (result.stream && result.stream.typingMaxMs > result.budgets.typingMaxMs)
     violations.push("stream typing maximum");
+  if (result.stream && result.stream.follow.gapPx > result.budgets.followGapPx)
+    violations.push("stream auto-follow");
   if (
     !result.history.sameText ||
     result.history.anchorShiftPx > result.budgets.historyAnchorShiftPx
