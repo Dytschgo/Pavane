@@ -1,18 +1,32 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { createServer as createPortProbe } from "node:net";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
+import { randomUUID } from "node:crypto";
 
 // Drives the actual debug Windows WebView, never a browser storage imitation.
 // Run only with no Ollama service on 11434; a bind error leaves it untouched.
 const root = resolve(import.meta.dirname, "..");
-const executable = join(root, "target", "debug", "pavane.exe");
-const context = await verificationContext(root, executable, "debug");
+const prebuilt = process.env.PAVANE_PREBUILT_VERIFICATION === "1";
+const executable = join(
+  root,
+  prebuilt ? "verification-input/pavane.exe" : "target/debug/pavane.exe",
+);
+const context = await verificationContext(
+  root,
+  executable,
+  prebuilt ? "release" : "debug",
+);
 const data = await mkdtemp(join(tmpdir(), "pavane-smoke-"));
+const profile = prebuilt ? `verify-native-${randomUUID()}` : null;
+const databaseDirectory = profile
+  ? join(process.env.LOCALAPPDATA, "cloud.pavane.desktop", "profiles", profile)
+  : data;
 const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 await mkdir(evidence, { recursive: true });
 await writeFile(
@@ -67,8 +81,18 @@ await new Promise((resolve, reject) => {
 let child;
 let browser;
 const diagnostics = [];
+async function requireFreePort() {
+  const probe = createPortProbe();
+  await new Promise((resolve, reject) => {
+    probe.once("error", reject);
+    probe.listen(9422, "127.0.0.1", resolve);
+  });
+  await new Promise((resolve) => probe.close(resolve));
+}
 async function launch() {
-  child = spawn(executable, [], {
+  // Never attach to an already-running app or debugging endpoint.
+  await requireFreePort();
+  child = spawn(executable, profile ? ["--profile", profile] : [], {
     cwd: root,
     env: {
       ...process.env,
@@ -95,6 +119,8 @@ async function launch() {
     const prompt = document.querySelector("#prompt");
     return prompt && !prompt.disabled;
   });
+  await access(join(databaseDirectory, "pavane.sqlite3"));
+  if (prebuilt) assert.equal(new URL(page.url()).hostname, "tauri.localhost");
   return page;
 }
 async function close() {
@@ -102,10 +128,22 @@ async function close() {
     await browser.close();
     browser = undefined;
   }
+  if (!child) return;
   if (child && child.exitCode === null && child.signalCode === null) {
     child.kill();
     await new Promise((resolve) => child.once("exit", resolve));
   }
+  const deadline = Date.now() + 15000;
+  for (;;) {
+    try {
+      await requireFreePort();
+      break;
+    } catch (error) {
+      if (error.code !== "EADDRINUSE" || Date.now() >= deadline) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  child = undefined;
 }
 const checks = [];
 try {
@@ -394,6 +432,8 @@ try {
         context,
         executable,
         data,
+        profile,
+        databaseDirectory,
         checks,
         requests: requests.length,
         fixture:

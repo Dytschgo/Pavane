@@ -9,6 +9,9 @@ New-Item -ItemType Directory -Path $evidence -Force | Out-Null
 $checks = [System.Collections.Generic.List[string]]::new()
 $devServer = $null
 $previousEvidenceOverride = $env:PAVANE_EVIDENCE_DIR
+$previousPrebuiltOverride = $env:PAVANE_PREBUILT_VERIFICATION
+$prebuilt = Test-Path -LiteralPath (Join-Path $repository 'verification-input/manifest.json') -PathType Leaf
+$mode = if ($prebuilt) { 'prebuilt-ui' } else { 'source-build' }
 $sourceEvidence = Join-Path ([IO.Path]::GetTempPath()) ('pavane-fixture-evidence-' + [Guid]::NewGuid().ToString('N'))
 $env:PAVANE_EVIDENCE_DIR = $sourceEvidence
 
@@ -20,43 +23,56 @@ function Invoke-Check {
 }
 
 try {
-    foreach ($tool in @('node', 'pnpm', 'cargo')) {
+    $tools = if ($prebuilt) { @('node', 'pnpm') } else { @('node', 'pnpm', 'cargo', 'rustc') }
+    foreach ($tool in $tools) {
         if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Missing guest prerequisite: $tool. No host installation was attempted." }
     }
+    if ([int]((& node --version).TrimStart('v').Split('.')[0]) -lt 24) { throw 'Node.js 24 or newer is required.' }
+    if ($prebuilt) {
+        if ($LiveCodex) { throw 'Prebuilt UI verification does not enable live Codex inference.' }
+        $env:PAVANE_PREBUILT_VERIFICATION = '1'
+        Invoke-Check 'verify transported prebuilt executable and source hashes' { node scripts/prepare-prebuilt.mjs --verify-only }
+    } else { $env:PAVANE_PREBUILT_VERIFICATION = $null }
     Invoke-Check 'install locked renderer dependencies' { pnpm install --frozen-lockfile }
-    Invoke-Check 'renderer format, lint, types and regressions' { pnpm check }
-    Invoke-Check 'Rust formatting' { cargo fmt --all --check }
-    Invoke-Check 'Rust lint' { cargo clippy --workspace --all-targets --locked -- -D warnings }
-    Invoke-Check 'storage and native regressions' { cargo test --workspace --locked }
-    Invoke-Check 'debug native build' { cargo build -p pavane --locked }
-    $vite = Join-Path $repository 'node_modules/vite/bin/vite.js'
-    $devServer = Start-Process -FilePath (Get-Command node).Source -ArgumentList ('"{0}" --host 127.0.0.1 --port 1420 --strictPort' -f $vite) -WorkingDirectory $repository -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $evidence 'vite.stdout.log') -RedirectStandardError (Join-Path $evidence 'vite.stderr.log')
+    if (-not $prebuilt) {
+        Invoke-Check 'renderer format, lint, types and regressions' { pnpm check }
+        Invoke-Check 'Rust formatting' { cargo fmt --all --check }
+        Invoke-Check 'Rust lint' { cargo clippy --workspace --all-targets --locked -- -D warnings }
+        Invoke-Check 'storage and native regressions' { cargo test --workspace --locked }
+        Invoke-Check 'debug native build' { cargo build -p pavane --locked }
+        $vite = Join-Path $repository 'node_modules/vite/bin/vite.js'
+        $devServer = Start-Process -FilePath (Get-Command node).Source -ArgumentList ('"{0}" --host 127.0.0.1 --port 1420 --strictPort' -f $vite) -WorkingDirectory $repository -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $evidence 'vite.stdout.log') -RedirectStandardError (Join-Path $evidence 'vite.stderr.log')
+    }
     Invoke-Check 'native mock-provider workflows' { node scripts/native-smoke.mjs }
-    Invoke-Check 'optimized standalone build' { pnpm desktop:build }
+    if (-not $prebuilt) { Invoke-Check 'optimized standalone build' { pnpm desktop:build } }
     if ($LiveCodex) {
         # Uses only the guest's existing Codex login. Never transfer a host auth file.
         Invoke-Check 'optimized Codex model picker, streaming, interrupt and job containment' { node scripts/codex-smoke.mjs --release }
     }
     Invoke-Check 'bundled release workflows and owned process-tree measurements' { node scripts/release-smoke.mjs }
-    $binary = Get-Item -LiteralPath (Join-Path $repository 'target/release/pavane.exe')
+    $binaryPath = if ($prebuilt) { 'verification-input/pavane.exe' } else { 'target/release/pavane.exe' }
+    $binary = Get-Item -LiteralPath (Join-Path $repository $binaryPath)
     $report = [ordered]@{
         result = 'passed'
+        mode = $mode
         platform = [Environment]::OSVersion.VersionString
         node = (& node --version)
-        rust = (& rustc --version)
+        rust = $(if ($prebuilt) { $null } else { & rustc --version })
         checks = @($checks)
         liveCodex = [bool]$LiveCodex
+        excluded = $(if ($prebuilt) { @('guest Rust build/tests', 'renderer static/unit checks', 'live Codex inference') } else { @() })
         binaryBytes = $binary.Length
         binarySha256 = (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Hash
         note = 'Native smoke uses synthetic data. Live Codex requires an existing guest login. Source/test success does not establish installer signing, RAM targets or a published release.'
     }
     $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'verification.json') -Encoding UTF8
 } catch {
-    [ordered]@{result='failed'; checks=@($checks); error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'verification.json') -Encoding UTF8
+    [ordered]@{result='failed'; mode=$mode; checks=@($checks); error=$_.Exception.Message} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'verification.json') -Encoding UTF8
     throw
 } finally {
     if ($devServer -and -not $devServer.HasExited) { Stop-Process -Id $devServer.Id -ErrorAction SilentlyContinue }
     $env:PAVANE_EVIDENCE_DIR = $previousEvidenceOverride
+    $env:PAVANE_PREBUILT_VERIFICATION = $previousPrebuiltOverride
     $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-final.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-unicode-limit.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png', 'release-smoke.json', 'release-empty.png', 'release-draft.png')
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()

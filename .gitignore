@@ -10,4 +10,5 @@ target/
 src-tauri/gen/
 evidence/
 lab-evidence/
+.crabbox/
 .DS_Store

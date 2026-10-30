@@ -1,5 +1,7 @@
 # Current plan
 
+Current bounded step is `PV-LAB-005`: validate and run a source/binary-hashed prebuilt UI candidate because the guest lacks Cargo and tool installation is disallowed. LabManager 2.4.7 repaired the host stderr seam and has disposed both old attempts; root verified current availability. Use the existing verifier command, no live Codex, a new reservation/request/guard and serialized desktop tests. [Preparation and evidence](../PREBUILT-VERIFICATION.md). The older lab gate below is historical.
+
 Finish `PV-NATIVE-004` on `feat/desktop-foundation` in `D:/Code/Pavane-desktop`, within draft [PR #1](https://github.com/Dytschgo/Pavane/pull/1) against `develop`. Keep it unmerged. Dylan explicitly authorized local Pavane testing on 30 October; LabManager requests remain separately scoped to its lab and cleanup boundary.
 
 The overnight native pass has actual local evidence: 31 renderer tests, 24 Rust tests, 12 mock native workflows, eight real Codex checks, and bundled-release routing/draft persistence. The updated standalone is built; record the exact source/binary evidence, finish documentation/static checks and push for Windows CI. Root fixed draft backlog/Unicode feedback, background discovery blocking, fixture teardown, profile isolation and chat hierarchy/focus. Independent draft/profile reviews found no material correctness finding.

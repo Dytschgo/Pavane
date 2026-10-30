@@ -2,11 +2,31 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { verifyPrebuilt } from "./prebuilt-input.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 
 // This describes the source at verification time, not an inferred build receipt.
 export async function verificationContext(root, executable, profile) {
+  if (process.env.PAVANE_PREBUILT_VERIFICATION === "1") {
+    const { manifest, executable: pinned } = await verifyPrebuilt(root);
+    if (executable !== pinned)
+      throw new Error("Unexpected prebuilt executable");
+    return {
+      capturedAt: new Date().toISOString(),
+      revision: manifest.revision,
+      mode: "prebuilt-ui",
+      sourceManifestSha256: manifest.sourceSha256,
+      sourceFiles: manifest.files.length,
+      executable: { profile, ...manifest.binary },
+      buildRust: manifest.buildRust,
+      buildNode: manifest.buildNode,
+      platform: process.platform,
+      architecture: process.arch,
+      node: process.version,
+      note: "Transported source/binary hashes checked. Build ran on the build machine. Rust tests are excluded from this UI-test run; consult separate CI/local test evidence.",
+    };
+  }
   const command = (program, args) =>
     execFileSync(program, args, {
       cwd: root,

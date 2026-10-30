@@ -1,5 +1,13 @@
 # Pavane Windows lab run
 
+## Latest disposition — 30 October, 18:27 UTC
+
+Installed LabManager 2.4.7 (`20261030-192334`) repairs the nested WinPS native-stderr/completion seam and BOM-aware artifact decoding. Root verified adapter SHA-256 `CBECCE29CB23F5BE05EEF01380600FAA4416C303CCA0BFB636A6D046F2A06BD4` and status at 18:29:44Z: available, no reservation. Later sections preserve historical gates and are not the current runtime state.
+
+Both old attempts are disposed through supported recovery. The new `cd8a61c` attempt, job `job-634d7ffc397c473a9df6ebf6a2a42a75`, request `pavane-cd8a61c-windows-001`, retained run `20261030T174907Z-92a86390702d`, failed before checks: Cargo was missing. Manager history preserves unknown/null exit with `aborted-by-reset`, cleanup confirmed, reservation `reservation-8481c13e858d452383f94df1ca22894d` retired. LabManager owned recovery `906d2e24b1824cc3bbf98cf0295f341e`, BootId 6→7, completed 17:58:15Z. Root did not access/replay its old token/guard or release it. Preserved guest verification report SHA-256: `958C865213417BFEE358C51E750689669D5C59A96F6E54B25BFA50EAA9B45C0A`. No Pavane checks passed in that attempt.
+
+The next candidate uses the [prebuilt UI path](PREBUILT-VERIFICATION.md), avoiding a prohibited Rust installation. It requires a distinct reservation/request/guard after fresh desktop probe and exact preflight. Source and binary manifests must be retained, and the reduced scope reported. The installed fixed-VM autonomous disposal grant replaces the earlier human-only recovery gate for eligible unknown jobs; use only its supported MCP operation, never ledger edits or fabricated receipts. There is still no queue or normal reusable-job supervision.
+
 User instruction, 29 October 2026: test on the lab Windows PC through LabManager, not on the coding PC. Local test processes and the dev server were stopped. Source editing, review and job preparation remain local.
 
 Update, 30 October: Dylan subsequently explicitly permitted local Pavane testing while asleep. That supersedes the opening restriction for Pavane only. Specifically coordinated LabManager verification still belongs on the lab under its actual approval/cleanup gates; no local LabManager builds/tests or fence bypass is authorized. Local native results are in [VERIFICATION.md](VERIFICATION.md).

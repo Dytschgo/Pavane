@@ -9,7 +9,12 @@ import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const executable = join(root, "target/release/pavane.exe");
+const executable = join(
+  root,
+  process.env.PAVANE_PREBUILT_VERIFICATION === "1"
+    ? "verification-input/pavane.exe"
+    : "target/release/pavane.exe",
+);
 const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 const context = await verificationContext(root, executable, "release");
 const checks = [];
@@ -39,7 +44,7 @@ await report("running");
 function memory(pid) {
   const script = `$all=@(Get-CimInstance Win32_Process);$ids=[System.Collections.Generic.HashSet[int]]::new();[void]$ids.Add(${pid});do{$before=$ids.Count;foreach($p in $all){if($ids.Contains([int]$p.ParentProcessId)){[void]$ids.Add([int]$p.ProcessId)}}}while($before-ne$ids.Count);$rows=@(foreach($taskId in $ids){$p=Get-Process -Id $taskId -ErrorAction SilentlyContinue;if($p){[pscustomobject]@{id=$p.Id;name=$p.ProcessName;workingSetBytes=$p.WorkingSet64;privateBytes=$p.PrivateMemorySize64}}});ConvertTo-Json -InputObject $rows -Compress`;
   const processes = JSON.parse(
-    execFileSync("pwsh", ["-NoProfile", "-Command", script], {
+    execFileSync("powershell.exe", ["-NoProfile", "-Command", script], {
       encoding: "utf8",
       windowsHide: true,
     }),

@@ -4,6 +4,10 @@ Active checkout: `D:/Code/Pavane-desktop`, branch `feat/desktop-foundation`, dra
 
 ## Current work
 
+Latest lab transition, 30 October 18:29 UTC: both historical managed attempts have been disposed through LabManager's supported fixed-VM recovery, preserving failed outcomes and old token/guards. Installed 2.4.7 adapter SHA-256 `CBECCE29CB23F5BE05EEF01380600FAA4416C303CCA0BFB636A6D046F2A06BD4` was verified; MCP status is available/no reservation. The `cd8a61c` guest verifier failed before any checks because Cargo was absent. This is an environment prerequisite failure, not an app assertion result. See the latest disposition at the top of [LAB-VERIFICATION.md](../LAB-VERIFICATION.md); historical gates below are superseded.
+
+`PV-LAB-005`, Sol working: prepare a [source-bound prebuilt UI candidate](../PREBUILT-VERIFICATION.md), preserving exact `& .\scripts\verify-windows.ps1` and the tool-installation=false policy. Three integrity regressions and 31 renderer tests passed locally. Review identified stale CDP attachment and an unsupported test-provenance claim; root fixed both, and preparation now requires clean tracked source. Actual packaged UI/guest runs remain pending. No application/provider/schema changes in this pass.
+
 `PV-NATIVE-004`, Sol: continue Dylan's Windows-first Rust/SQLite chat hill climb. On 30 October Dylan explicitly permitted Pavane tests/builds on this computer while asleep; that supersedes the earlier local-test prohibition. LabManager-specific verification still goes through its separately authorized lab path. This exception does not authorize LabManager host builds, native manager input or cleanup attestation.
 
 The app includes durable normal/30-day chats, drafts/history/recovery, local workspaces/bot instructions, Ollama, four-way comparison and official Codex subscription chat with real model/reasoning/tier/limit discovery. Chat has a T3-inspired composer/picker and safe Markdown. Other provider adapters, autonomous swarms, attachments and media generation remain planned.

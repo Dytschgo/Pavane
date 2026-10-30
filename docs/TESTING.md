@@ -2,6 +2,8 @@
 
 Use a fresh checkout, Node.js 24+, pnpm 10.34.5, stable MSVC Rust, C++ build tools and WebView2.
 
+For a lab without Rust, use the [source-bound prebuilt UI path](PREBUILT-VERIFICATION.md). It runs the real bundled app and records its reduced scope; it does not install a toolchain or replace the source/build gates.
+
 On 30 October 2026 Dylan explicitly permitted Pavane testing on this computer while he sleeps. This supersedes the earlier lab-only restriction for Pavane. Keep app data isolated and use the lab for specifically coordinated LabManager verification requests. This does not authorize local LabManager builds/tests or bypass its unresolved job fence. The [scoped lab plan](LAB-VERIFICATION.md) and exact `& .\scripts\verify-windows.ps1` remain available for supported future guest execution. GitHub Windows CI is a separate source/build gate.
 
 ```powershell
