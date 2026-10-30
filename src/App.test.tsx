@@ -61,7 +61,7 @@ const sentTurn: TurnStarted = {
   ],
 };
 function connectSol() {
-  mocked.catalog.mockResolvedValue({
+  const catalog = {
     models: [
       {
         id: "codex:sol",
@@ -74,7 +74,9 @@ function connectSol() {
       },
     ],
     providers: [],
-  });
+  };
+  mocked.catalog.mockResolvedValue(catalog);
+  return catalog;
 }
 
 beforeEach(() => {
@@ -203,6 +205,66 @@ it("does not steal search focus when a pending send finishes", async () => {
   expect(search).toHaveFocus();
 });
 
+it("keeps the next message sendable while post-response quota discovery is pending", async () => {
+  const catalog = connectSol();
+  let finishRefresh: (value: typeof catalog) => void = () => {
+    throw new Error("Refresh was not started");
+  };
+  mocked.catalog.mockResolvedValueOnce(catalog).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishRefresh = resolve;
+      }),
+  );
+  let receive: (event: RunEvent) => void = () => {
+    throw new Error("Run callback was not registered");
+  };
+  mocked.send
+    .mockImplementationOnce(
+      (
+        _id: string,
+        _text: string,
+        _models: string[],
+        onEvent: (event: RunEvent) => void,
+      ) => {
+        receive = onEvent;
+        return Promise.resolve(sentTurn);
+      },
+    )
+    .mockResolvedValue({
+      user: { ...sentTurn.user, id: "follow-up", sequence: 3 },
+      runs: [],
+    });
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const input = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.change(input, { target: { value: "Hello" } });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await screen.findByRole("button", { name: "Stop responses" });
+  fireEvent.change(input, { target: { value: "Follow-up" } });
+  await act(async () =>
+    receive({
+      runId: "sent-run",
+      chatId: first.id,
+      messageId: "sent-reply",
+      kind: "finished",
+      delta: "Done",
+      status: "complete",
+      error: null,
+    }),
+  );
+  await waitFor(() => expect(mocked.catalog).toHaveBeenCalledTimes(2));
+  try {
+    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
+    expect(input).toHaveValue("Follow-up");
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    await waitFor(() => expect(mocked.send).toHaveBeenCalledTimes(2));
+  } finally {
+    await act(async () => finishRefresh(catalog));
+  }
+});
+
 it("identifies the originating chat when its response fails after navigation", async () => {
   connectSol();
   let receive: (event: RunEvent) => void = () => {
@@ -251,6 +313,70 @@ it("identifies the originating chat when its response fails after navigation", a
 });
 
 describe("durable draft interaction", () => {
+  it("coalesces a burst behind a slow save into the latest durable snapshot", async () => {
+    let release: () => void = () => {
+      throw new Error("Save was not started");
+    };
+    mocked.saveDraft.mockResolvedValue(undefined).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(<App />);
+    const input = await screen.findByRole("textbox", { name: "Message" });
+    await waitFor(() => expect(input).toBeEnabled());
+    const initial = "a".repeat(16 * 1024);
+    fireEvent.change(input, { target: { value: initial } });
+    await waitFor(() => expect(mocked.saveDraft).toHaveBeenCalledTimes(1));
+    for (let edit = 1; edit <= 200; edit++)
+      fireEvent.change(input, { target: { value: initial + edit } });
+    await act(async () => release());
+    await waitFor(() =>
+      expect(mocked.saveDraft).toHaveBeenLastCalledWith(
+        first.id,
+        initial + 200,
+      ),
+    );
+    expect(mocked.saveDraft).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Saving draft…")).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft not saved")).not.toBeInTheDocument();
+  });
+
+  it("preserves oversized Unicode text with explicit feedback until it can be saved", async () => {
+    connectSol();
+    render(<App />);
+    await screen.findByRole("button", {
+      name: "Model: Sol, Low. Change model",
+    });
+    const input = screen.getByRole("textbox", { name: "Message" });
+    await waitFor(() => expect(input).toBeEnabled());
+    const oversized = "界".repeat(30_000);
+    fireEvent.change(input, { target: { value: oversized } });
+    await screen.findByText(/Shorten it to save and send/);
+    expect(input).toHaveValue(oversized);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(mocked.saveDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    expect(mocked.send).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open chat Second conversation" }),
+    );
+    await waitFor(() => expect(input).toHaveValue(""));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open chat First conversation" }),
+    );
+    await waitFor(() => expect(input).toHaveValue(oversized));
+    fireEvent.change(input, { target: { value: "界".repeat(20_000) } });
+    await waitFor(() => expect(mocked.saveDraft).toHaveBeenCalledTimes(1));
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
+    expect(
+      screen.queryByText(/Shorten it to save and send/),
+    ).not.toBeInTheDocument();
+  });
+
   it("acknowledges the latest queued save rather than an earlier write", async () => {
     const releases: (() => void)[] = [];
     mocked.saveDraft.mockImplementation(

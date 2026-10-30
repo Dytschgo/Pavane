@@ -64,6 +64,17 @@ export function ModelPicker({
   const tier = selected?.serviceTiers?.find(
     (tier) => tier.id === resolved?.serviceTier,
   );
+  const modelName =
+    selected?.name ??
+    (connecting
+      ? "Connecting models"
+      : preferences.selected.length
+        ? "Model unavailable"
+        : "Choose model");
+  const triggerLabel =
+    preferences.selected.length > 1
+      ? `${preferences.selected.length} models`
+      : modelName;
   const terms = query.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean);
   const visible = models.filter((model) => {
     const inProvider =
@@ -163,17 +174,10 @@ export function ModelPicker({
           variant="ghost"
           size="small"
           className="model-trigger"
-          aria-label={`Model: ${selected?.name ?? "Choose model"}${effort ? `, ${effortLabel(effort)}` : ""}${tier ? `, ${tier.name}` : ""}. Change model`}
+          aria-label={`Model: ${triggerLabel}${effort && preferences.selected.length === 1 ? `, ${effortLabel(effort)}` : ""}${tier && preferences.selected.length === 1 ? `, ${tier.name}` : ""}. Change model`}
         >
           <TriggerIcon size={15} />
-          <span>
-            {preferences.selected.length > 1
-              ? `${preferences.selected.length} models`
-              : (selected?.name ??
-                (preferences.selected.length
-                  ? "Model unavailable"
-                  : "Choose model"))}
-          </span>
+          <span>{triggerLabel}</span>
           {effort && preferences.selected.length === 1 && (
             <small>{effortLabel(effort)}</small>
           )}

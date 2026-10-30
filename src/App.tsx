@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
@@ -50,6 +50,7 @@ import { Providers } from "./components/providers";
 import { ChatMessage } from "./components/chat-message";
 import { useModelPreferences } from "./lib/model-preferences";
 import { resolveModelOptions } from "./lib/model-options";
+import { DraftWriter, MAX_DRAFT_BYTES } from "./lib/draft-writer";
 
 const views: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
@@ -103,11 +104,9 @@ export function App() {
   const [saving, setSaving] = useState(false);
   const selection = useRef(0);
   const currentRef = useRef<string | null>(null);
-  const draftQueue = useRef<Promise<void>>(Promise.resolve());
   const draftCache = useRef(
     new Map<string, { content: string; version: number }>(),
   );
-  const pendingSaves = useRef(0);
   const draftVersion = useRef(0);
   const listVersion = useRef(0);
   const searchActivated = useRef(false);
@@ -122,10 +121,27 @@ export function App() {
   const running = messages.some((message) =>
     ["pending", "running"].includes(message.status),
   );
+  const waitingForModels = connecting && models.length === 0;
+  const draftTooLong = useMemo(
+    () => new TextEncoder().encode(draft).byteLength > MAX_DRAFT_BYTES,
+    [draft],
+  );
 
   const report = useCallback(
     (failure: unknown) => setError(errorText(failure)),
     [],
+  );
+  const [draftWriter] = useState(
+    () =>
+      new DraftWriter(
+        api.saveDraft,
+        ({ chatId, version }) => {
+          if (draftCache.current.get(chatId)?.version === version)
+            draftCache.current.delete(chatId);
+        },
+        report,
+        setSaving,
+      ),
   );
   const focusComposer = useCallback((chatId?: string) => {
     if (chatId && currentRef.current !== chatId) return;
@@ -161,7 +177,7 @@ export function App() {
       setLoading(true);
       nearBottom.current = true;
       try {
-        await draftQueue.current;
+        await draftWriter.flush();
         const [history, savedDraft] = await Promise.all([
           api.messages(chat.id),
           api.draft(chat.id),
@@ -184,7 +200,7 @@ export function App() {
         if (selection.current === version) setLoading(false);
       }
     },
-    [report],
+    [draftWriter, report],
   );
 
   useEffect(() => {
@@ -376,22 +392,11 @@ export function App() {
   function changeDraft(value: string) {
     setDraft(value);
     if (!currentId) return;
-    setSaving(true);
     const chatId = currentId;
     const version = ++draftVersion.current;
     draftCache.current.set(chatId, { content: value, version });
-    pendingSaves.current++;
-    draftQueue.current = draftQueue.current
-      .then(() => api.saveDraft(chatId, value))
-      .then(() => {
-        if (draftCache.current.get(chatId)?.version === version)
-          draftCache.current.delete(chatId);
-      })
-      .catch(report)
-      .finally(() => {
-        pendingSaves.current--;
-        setSaving(pendingSaves.current > 0);
-      });
+    if (new TextEncoder().encode(value).byteLength <= MAX_DRAFT_BYTES)
+      draftWriter.enqueue({ chatId, content: value, version });
   }
 
   const connect = useCallback(async () => {
@@ -492,7 +497,15 @@ export function App() {
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (!draft.trim() || busy || running || loading || connecting) return;
+    if (
+      !draft.trim() ||
+      busy ||
+      running ||
+      loading ||
+      waitingForModels ||
+      draftTooLong
+    )
+      return;
     if (
       !selectedModels.length ||
       selectedModels.some((id) => !models.some((model) => model.id === id))
@@ -515,7 +528,7 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      await draftQueue.current;
+      await draftWriter.flush();
       let chatId = currentId;
       if (!chatId) {
         const chat = await api.createChat(false, workspaceId);
@@ -1119,6 +1132,12 @@ export function App() {
                 )}
               </div>
               <div className="composer-region">
+                {draftTooLong && (
+                  <p className="composer-error" id="draft-limit" role="alert">
+                    Message exceeds 64 KiB. Shorten it to save and send. Your
+                    text is kept in this window.
+                  </p>
+                )}
                 {current?.expiresAt && (
                   <div className="retention-notice">
                     <Clock3 size={13} />
@@ -1149,6 +1168,8 @@ export function App() {
                         : "Ask anything…"
                     }
                     value={draft}
+                    aria-invalid={draftTooLong || undefined}
+                    aria-describedby={draftTooLong ? "draft-limit" : undefined}
                     onChange={(event) => changeDraft(event.target.value)}
                     disabled={loading || busy || (native && !currentId)}
                     maxLength={65536}
@@ -1214,13 +1235,19 @@ export function App() {
                           size="icon"
                           type="submit"
                           aria-label={
-                            connecting ? "Connecting models" : "Send message"
+                            waitingForModels
+                              ? "Connecting models"
+                              : "Send message"
                           }
                           disabled={
-                            !draft.trim() || busy || loading || connecting
+                            !draft.trim() ||
+                            busy ||
+                            loading ||
+                            waitingForModels ||
+                            draftTooLong
                           }
                         >
-                          {busy || connecting ? (
+                          {busy || waitingForModels ? (
                             <LoaderCircle className="spin" size={16} />
                           ) : (
                             <ArrowUp size={20} />

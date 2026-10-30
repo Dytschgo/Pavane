@@ -30,10 +30,12 @@ function Harness({
   initial,
   catalog = models,
   onSelected,
+  connecting = false,
 }: {
   initial?: Partial<Preferences>;
   catalog?: Model[];
   onSelected?: () => void;
+  connecting?: boolean;
 }) {
   const [preferences, update] = useState<Preferences>({
     selected: ["codex:sol"],
@@ -51,7 +53,7 @@ function Harness({
         update={update}
         open={open}
         onOpenChange={setOpen}
-        connecting={false}
+        connecting={connecting}
         onRefresh={() => {}}
         onConnect={() => {}}
         onSelected={onSelected}
@@ -70,6 +72,21 @@ beforeEach(() => {
     },
   );
 });
+
+it.each([
+  { connecting: true, label: "Connecting models" },
+  { connecting: false, label: "Model unavailable" },
+])(
+  "describes an undiscovered saved model truthfully: $label",
+  async ({ connecting, label }) => {
+    render(<Harness catalog={[]} connecting={connecting} />);
+    expect(
+      await screen.findByRole("button", {
+        name: `Model: ${label}. Change model`,
+      }),
+    ).toHaveTextContent(label);
+  },
+);
 
 it("clears a completed search and highlights the chosen model when reopened", async () => {
   const user = userEvent.setup();
