@@ -1,5 +1,13 @@
 # Pavane Windows lab run
 
+## Current acceptance — 30 October, 18:55 UTC
+
+Actual prebuilt UI run `20261030T185029Z-544145d70218` passed, exit 0, 54.3046 seconds guest execution / 82.2780 seconds overall. Candidate `3f82cde87d64a8aac962cd0ffba8ded2a278e195`; job `job-bd50e805a2424c37971c1c2c9195df42`, reservation `reservation-12bb972756d243d3baa76a1d1c66bcc7`, request `pavane-3f82cde-ui-windows-001`. Exact core invocation unchanged. The guest verified 55 source/harness/asset files plus the executable against the prepared manifest, restored locked dependencies with existing Node 22.23.3/pnpm 11.25.0 and disabled install scripts/package-manager downloads, then passed 12 native workflows and two release checks. All 12 synthetic exports were retained, including nine screenshots inspected by root. No guest Rust build/tests or live Codex inference. See [full evidence and limitations](VERIFICATION.md#prebuilt-ui-acceptance-on-the-lab--30-october-2026).
+
+Supported administrative disposal `f4071f7e110b49efa56c0e0a5f8aa042`, request `discard-pavane-3f82cde-ui-20261030-001`, completed 18:54:21.8745916Z: BootId 8→9, restart 1 / cleanup 1, task/observer/workspace acknowledgement, workspace existed before deletion. Retained run remains passed/exit 0. Managed job preserves its legacy unknown/exit 0 outcome with cleanup confirmed and separate `aborted-by-reset` disposition; reservation retired. Root preserved all old token/guards, used no release/replay/ledger edit and moved the exact transport payload into private retention after cleanup. Fresh probe/status at 18:55:32Z returned ready+desktop / available, no reservation or desktop cleanup fence. This is a snapshot, not authority for an unprobed future dispatch.
+
+An intermediate prebuilt attempt at `4f03175`, job `job-31272f729adb4462a3222405ce1998d4`, failed before UI because the verifier incorrectly retained the build's Node-24 requirement. Root preserved its report and completed supported disposal `76f75a3cfeb1449d854ff31175d0756a` at 18:43:55Z, BootId 7→8. The corrected UI-only runtime was then proven locally on the exact guest versions before the successful distinct submission. Historical sections below are chronology.
+
 ## Latest disposition — 30 October, 18:27 UTC
 
 Installed LabManager 2.4.7 (`20261030-192334`) repairs the nested WinPS native-stderr/completion seam and BOM-aware artifact decoding. Root verified adapter SHA-256 `CBECCE29CB23F5BE05EEF01380600FAA4416C303CCA0BFB636A6D046F2A06BD4` and status at 18:29:44Z: available, no reservation. Later sections preserve historical gates and are not the current runtime state.
