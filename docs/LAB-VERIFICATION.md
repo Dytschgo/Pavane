@@ -1,6 +1,12 @@
 # Pavane Windows lab run
 
-## Latest CI-artifact acceptance — 30 October, 20:40 UTC
+## Current checkpoint — 30 October, 21:29 UTC
+
+CI `41129664403` passed requested `6c4e3d7`; actual merge build `267a51c8b58e76af110dce17b1324988147ce6fd`. Hash-checked CI-artifact lab run `20261030T212253Z-e3a5a7bcb3ea` passed native12/release2, pinned auto-follow (gap0), upward reading (anchor0px during15473px growth) and exact reply/draft reload. Overall failed on a subsequent60s resume wait; resumed-follow/history not established. Four reports/11PNGs retained, long/read captures inspected. Diagnostic-only fixture phase/input/viewport evidence is next; app behavior/input/budgets unchanged. No local app/tests/builds/UI. [Exact identities and limitations](VERIFICATION.md#partial-stream-follow-acceptance-resume-timeout--30-october-2129-utc).
+
+Root owned job `job-7190591ecd1a45299a5b726baf75a5a9` and completed supported disposal `4881c31e9cc845e088b9fc91d8d7066e` at21:28:10.6515407Z, Boot11→12/restart1cleanup1/task-observer-workspace acknowledgement. Unknown/exit1 preserved, cleanuptrue/reservation retired. Fresh21:28:55Z ready+desktop/statusavailable/noreservation. No run/recovery active. Installed2.4.8 identity/policy unchanged; exact verifier/desktop1800/noLiveCodex/noinstall. Use a distinct new candidate/request/reservation after fresh readiness; never replay retired attempts. Historical setup/fences below describe their dated states, not today's readiness.
+
+## Earlier pagination acceptance — 30 October, 20:40 UTC
 
 Installed LabManager2.4.8 (`20261030-212752`) adapter SHA-256 `57BE984264B6261287A816131016420550B8D87D19FDFFEA40923EDB4A3F7926` verified. CI run41122549470 passed PR head`edaeea0efc0ee101dd4b5dbc9ef43d9562dc76ab`; actual build merge`fc941e1f07213238f2ad65db93e8ffa1e373d4c0` preserved separately. CI artifact13010675758 digest,56source hashes and executable hash were checked without local execution. Fresh probe/preflight then admitted new job`job-0bf3c0aad1724a96afb50a99360fa7de`, reservation`reservation-fcd8c0de394548dcbe296ba976c1010a`, request`pavane-edaeea0-ui-windows-001`; exact verifier invocation,desktop1800s,noLiveCodex.
 

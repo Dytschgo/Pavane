@@ -111,6 +111,7 @@ const result = {
   },
   checks: [],
   result: "running",
+  phase: "startup",
 };
 const report = () =>
   writeFile(
@@ -118,7 +119,7 @@ const report = () =>
     JSON.stringify(result, null, 2),
   );
 await report();
-let child, browser, launchError;
+let child, browser, launchError, page;
 try {
   await freePort();
   child = spawn(executable, ["--profile", profile], {
@@ -149,7 +150,7 @@ try {
   }
   if (launchError) throw launchError;
   assert.ok(browser, "Owned WebView did not start");
-  const page = browser.contexts()[0].pages()[0];
+  page = browser.contexts()[0].pages()[0];
   page.setDefaultTimeout(60000);
   const editor = page.getByRole("textbox", { name: "Message", exact: true });
   await editor.waitFor();
@@ -157,6 +158,7 @@ try {
   await page.getByRole("button", { name: /Change model/ }).click();
   await page.getByRole("option", { name: /performance-fixture/ }).click();
   if (!historyOnly) {
+    result.phase = "pinned-stream";
     // Warm the lazy Markdown module before the measured stream.
     await editor.fill("WARMUP");
     await page
@@ -333,12 +335,42 @@ try {
     );
 
     // Exercise deliberate reading separately from the typing-only pinned repro.
+    result.phase = "manual-reading-setup";
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await page.waitForFunction(
       () =>
         !document.querySelector("#prompt").disabled &&
         document.querySelectorAll("article.message").length === 0,
     );
+    await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      const trace = (window.__followTrace = []);
+      const wheels = (window.__followWheels = []);
+      for (const type of ["wheel", "scroll"])
+        area.addEventListener(
+          type,
+          (event) => {
+            const entry = {
+              type,
+              atMs: performance.now(),
+              top: area.scrollTop,
+              height: area.scrollHeight,
+              viewport: area.clientHeight,
+              deltaY: event.type === "wheel" ? event.deltaY : null,
+              deltaMode: event.type === "wheel" ? event.deltaMode : null,
+              target:
+                event.target instanceof Element ? event.target.className : null,
+            };
+            trace.push(entry);
+            if (trace.length > 80) trace.shift();
+            if (type === "wheel") {
+              wheels.push(entry);
+              if (wheels.length > 4) wheels.shift();
+            }
+          },
+          { passive: true },
+        );
+    });
     await editor.fill("LONG_STREAM");
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -350,6 +382,7 @@ try {
     const bounds = await conversation.boundingBox();
     assert.ok(bounds, "Conversation viewport is missing");
     await page.mouse.move(bounds.x + 12, bounds.y + 100);
+    result.phase = "manual-reading-upward-wheel";
     await page.mouse.wheel(0, -1500);
     await page.waitForFunction(() => {
       const area = document.querySelector(".conversation");
@@ -382,6 +415,7 @@ try {
       reading.sectionCount < 240,
       "Reading scenario began too late in the stream",
     );
+    result.phase = "manual-reading-growth";
     await page.waitForFunction(
       (count) => document.querySelectorAll(".markdown h2").length >= count,
       reading.sectionCount + 40,
@@ -403,7 +437,18 @@ try {
       path: join(evidence, `performance-${label}-reading.png`),
     });
     // Real downward input returns to latest; subsequent growth must follow again.
+    result.phase = "resume-wheel";
+    result.reading.beforeResume = await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      return {
+        top: area.scrollTop,
+        height: area.scrollHeight,
+        viewport: area.clientHeight,
+      };
+    });
+    await report();
     await page.mouse.wheel(0, 10000000);
+    result.phase = "resume-reach-latest";
     await page.waitForFunction(() => {
       const area = document.querySelector(".conversation");
       return area.scrollHeight - area.scrollTop - area.clientHeight <= 24;
@@ -417,10 +462,14 @@ try {
       resumed.active && resumed.sectionCount < 260,
       "Must resume during an active stream",
     );
+    result.reading.resumedSectionCount = resumed.sectionCount;
+    result.phase = "resume-content-growth";
+    await report();
     await page.waitForFunction(
       (count) => document.querySelectorAll(".markdown h2").length >= count,
       resumed.sectionCount + 20,
     );
+    result.phase = "resume-stream-completion";
     await page.getByText("END_LONG_RESPONSE", { exact: true }).waitFor();
     await page
       .getByRole("button", { name: "Stop responses" })
@@ -438,7 +487,6 @@ try {
         area.scrollHeight - area.scrollTop - area.clientHeight,
       );
     });
-    result.reading.resumedSectionCount = resumed.sectionCount;
     result.reading.growthAfterResumePx = await page.evaluate(
       (height) => document.querySelector(".conversation").scrollHeight - height,
       resumed.scrollHeight,
@@ -447,6 +495,7 @@ try {
   }
   // Seed history through the actual native public chat/run commands, then open
   // it through the UI. No database editing or production-only fixture endpoint.
+  result.phase = "history";
   const historyChat = await page.evaluate(async (turns) => {
     const bridge = window.__TAURI_INTERNALS__;
     const chat = await bridge.invoke("create_chat", {
@@ -583,9 +632,32 @@ try {
   result.violations = violations;
   assert.deepEqual(violations, [], "Responsiveness budget exceeded");
   result.result = "passed";
+  result.phase = "complete";
 } catch (error) {
   result.result = "failed";
   result.error = String(error);
+  result.errorStack = String(error.stack).split("\n").slice(0, 6);
+  if (page) {
+    result.failureViewport = await page
+      .evaluate(() => {
+        const area = document.querySelector(".conversation");
+        return {
+          top: area?.scrollTop,
+          height: area?.scrollHeight,
+          viewport: area?.clientHeight,
+          sectionCount: document.querySelectorAll(".markdown h2").length,
+          active: !!document.querySelector(
+            'button[aria-label="Stop responses"]',
+          ),
+          trace: window.__followTrace ?? [],
+          wheels: window.__followWheels ?? [],
+        };
+      })
+      .catch(() => null);
+    await page
+      .screenshot({ path: join(evidence, `performance-${label}-failure.png`) })
+      .catch(() => {});
+  }
   process.exitCode = 1;
 } finally {
   await report();
