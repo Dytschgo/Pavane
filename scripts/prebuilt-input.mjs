@@ -10,7 +10,7 @@ export const sourcePath = (path) =>
   typeof path === "string" &&
   !path.split("/").some((part) => !part || part === "." || part === "..") &&
   !/[\\:]/.test(path) &&
-  /^(src\/|src-tauri\/|crates\/|scripts\/|(?:package\.json|pnpm-lock\.yaml|Cargo\.toml|Cargo\.lock|vite\.config\.ts|tsconfig\.json|index\.html)$)/.test(
+  /^(src\/|src-tauri\/|crates\/|scripts\/|assets\/|(?:package\.json|pnpm-lock\.yaml|Cargo\.toml|Cargo\.lock|vite\.config\.ts|tsconfig\.json|index\.html)$)/.test(
     path,
   );
 

@@ -43,6 +43,7 @@ async function fixture(t) {
 }
 
 test("prebuilt verification works without Git metadata or Rust", async (t) => {
+  assert.equal(sourcePath("assets/pavane.svg"), true);
   const { root } = await fixture(t);
   const result = await verifyPrebuilt(root);
   assert.equal(result.manifest.revision, "a".repeat(40));

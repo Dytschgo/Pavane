@@ -9,7 +9,7 @@ import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
 import { randomUUID } from "node:crypto";
 
-// Drives the actual debug Windows WebView, never a browser storage imitation.
+// Drives the actual Windows WebView, never a browser storage imitation.
 // Run only with no Ollama service on 11434; a bind error leaves it untouched.
 const root = resolve(import.meta.dirname, "..");
 const prebuilt = process.env.PAVANE_PREBUILT_VERIFICATION === "1";
