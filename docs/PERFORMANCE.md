@@ -2,6 +2,16 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
+## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
+
+CI `41133689030` passed requested `301cae48ccd7bb9fe638ddce77975493b0104aa0`, including the event-order and negative gesture regressions. Actual merge build `6b7cc9a492b84cfd932741ef65e9950c95d3da6e`; artifact `13014841216`, ZIP `ddda58faaf6ef5f06d25e01d6a544f991f9799827744eaeb97ef2b347a0d1114`. All56source hashes and executable were verified before dispatch. [Full identities](VERIFICATION.md#complete-scroll-follow-acceptance--30-october-2200-utc).
+
+Actual lab `20261030T215451Z-82308f5fa2a2` passed the unchanged native fixture: pinned stream final gap0/composerfocused; deliberately scrolled-up paragraph0px shift during15472px growth; resumed while active at91sections and followed80888px of later growth to gap0. History100→110 retained the old paragraph within0.1875px after7152px compensation. Full71989byte reply and concurrently typed draft survived SQLite reload exactly. Typing action p9586.06ms/max141.08ms met existing120/500ms budgets. Native12/release2 also passed, all4reports/12captures retained and inspected. No local app/tests/build/UI, guest Rust/tool install or live inference.
+
+This establishes red-to-green for the diagnosed wheel/layout race and protects the previous history repair. Source/harness remain at301cae4; documentation-only checkpoints do not rewrite the actual event/build/test revisions. The unsigned tested executable is copied without launch to ignored `evidence/ci-build-301cae4/pavane.exe`; synthetic evidence to `evidence/lab-20261030T215451Z-82308f5fa2a2`. It is a test build, not an installer, public release or comprehensive input-device/accessibility certification.
+
+No CPU/RAM improvement is claimed:81active typing samples, ScriptDuration11.93728s/LayoutDuration2.191253s,90long tasks/max109ms on this workload remain observations. Next `PV-PERF-003` work should attribute JavaScript cost with bounded native profiling before changing Markdown cadence/parsing. Preserve this accepted app behavior and use comparable workload/provenance. Historical red/partial results below remain incident evidence, superseded by this acceptance.
+
 ## Verified pagination acceptance
 
 CI run `41122549470` passed requested head `edaeea0efc0ee101dd4b5dbc9ef43d9562dc76ab`, including the App pagination regression. It built actual merge revision `fc941e1f07213238f2ad65db93e8ffa1e373d4c0` and uploaded artifact `13010675758`. Archive SHA-256 `2b726e9fa5446e77fb640c3ac87df4b2820ae7757aabb5ebf14b9cfd28dd3b90`; executable 8,520,704bytes/SHA-256 `7d1cc7f067aecb1586f95dfdc839e512f609e27f8bcbe81cc2f91ed96dcbc311`. All56 source-file hashes matched the frozen checkout before dispatch; manifest SHA-256 `debf5af73fcfe3e91500338f77612b98f4c1f206a8fa8802587cc5c2c1ea9958`. No candidate execution/build occurred on Dylan's computer.

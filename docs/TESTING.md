@@ -6,7 +6,7 @@ Use a fresh checkout, Node.js 24+, pnpm 10.34.5, stable MSVC Rust, C++ build too
 
 For a lab without Rust, use the [source-bound prebuilt UI path](PREBUILT-VERIFICATION.md). It runs the real bundled app and records its reduced scope; it does not install a toolchain or replace the source/build gates.
 
-On 30 October 2026 Dylan explicitly permitted Pavane testing on this computer while he sleeps. This supersedes the earlier lab-only restriction for Pavane. Keep app data isolated and use the lab for specifically coordinated LabManager verification requests. This does not authorize local LabManager builds/tests or bypass its unresolved job fence. The [scoped lab plan](LAB-VERIFICATION.md) and exact `& .\scripts\verify-windows.ps1` remain available for supported future guest execution. GitHub Windows CI is a separate source/build gate.
+The earlier sleep-time permission was later revoked. Execute the commands below only in CI or an approved lab/build environment, with isolated app data. The [scoped lab plan](LAB-VERIFICATION.md) and exact `& .\scripts\verify-windows.ps1` govern managed native runs. GitHub Windows CI is a separate source/build gate; actual lab cleanup requires its own supported receipt before the next job.
 
 ```powershell
 pnpm install --frozen-lockfile
@@ -62,5 +62,9 @@ This checks the actual `tauri.localhost` bundled renderer, all routes and durabl
 The optional `--profile NAME` database selection works in both builds. Names use 1–64 ASCII letters, numbers, hyphens or underscores. Invalid arguments or unwritable directories fail startup without falling back to normal data. Windows names are case-insensitive. This is database selection, not a filesystem sandbox or separate provider account: existing Codex credentials and configuration remain CLI-owned/shared. Ordinary WebView preferences remain shared unless a separate `WEBVIEW2_USER_DATA_FOLDER` is supplied. Normal launch keeps the existing database; debug-only environment behavior is unchanged.
 
 ## Data and measurements
+
+`node scripts/performance-smoke.mjs --label candidate` exercises a bundled release with an isolated SQLite/WebView profile, owned CDP9425 and synthetic loopback provider. It warms Markdown, streams300formatted sections while typing only in the composer, checks exact reply/draft reload, then deliberately reads upward during another stream and resumes following through real wheel input while content still grows. It also loads native history across100messages. Budgets cover typing p95/max, pinned/resumed bottom gap and held/prepended paragraph position. `--history-only` is the shorter paging repro; it does not establish streaming behavior. The exact lab wrapper already includes the full fixture serially after native/release checks.
+
+Inspect long/read/history captures and JSON before accepting the result. A timeout preserves phase, bounded synthetic wheel/scroll trace, failure viewport/stack and an allowlisted failure PNG. Do not replace missing active-stream growth with a final scroll or turn a failed wait into a pass. Full source-bound acceptance exists at301cae4; rerun for changed behavior/harness or a new unresolved concern, not an unchanged documentation checkpoint. [Measured proof and limits](PERFORMANCE.md).
 
 Keep all evidence synthetic. Do not commit SQLite files, raw provider logs, tokens or user messages. The executable's size, renderer transfer size and idle process memory are different measurements. Record the build mode, device, process tree and workload before stating any performance number. No regression comparison exists for this new repository.

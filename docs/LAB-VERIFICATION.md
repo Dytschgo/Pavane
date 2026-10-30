@@ -1,6 +1,12 @@
 # Pavane Windows lab run
 
-## Current checkpoint — 30 October, 21:45 UTC
+## Current accepted checkpoint — 30 October, 22:00 UTC
+
+Requested301cae4 passed CI41133689030/job124330750778 and actual hash-bound lab `20261030T215451Z-82308f5fa2a2`. Native12/release2/full performance passed: pinnedgap0, manualanchor0px during15472px growth, active-stream resume at91sections followed80888px more to gap0, history100→110 anchor0.1875px, exact reply/draft reload and typing budgets. All4reports/12PNGs retained and inspected. [Exact source/build/artifact identities and scope](VERIFICATION.md#complete-scroll-follow-acceptance--30-october-2200-utc). Unsigned tested executable copied without launch to ignored `evidence/ci-build-301cae4/`; no installer/release or guest Codex proof.
+
+Root disposal `2cf4a5e99acc43758c5d0c98354f8d81` completed21:59:07.8710158Z, Boot13→14/restart1cleanup1/task-observer-workspace acknowledgement. Retained run stays passed; manager unknown/exit0/exited-zero preserved with separate cleanuptrue/aborted-by-reset; reservation retired. Fresh21:59:39Z ready+desktop/statusavailable/noreservation. No project/recovery/maintenance active. Installed2.4.8/policy/verifier/desktop1800/noLiveCodex/noinstall unchanged. Original token/guards/payload private, no retry/release/ledger edits. Local app/tests/builds/UI remain prohibited. This successor is documentation-only; rerun native checks for new behavior/harness/concerns, not unchanged records. Root owns next justified lab turn after fresh probe/preflight/distinct candidate ownership; CPU attribution is next separate work.
+
+## Earlier diagnosis checkpoint — 30 October, 21:45 UTC
 
 Diagnostic CI545188d passed; actual hash-bound lab run `20261030T213849Z-5c0902fd5507` confirmed a resume race at the native wheel/scroll boundary. Wheel reaches oldmax34207, but387px growth arrives before the handler and it misses end intent. Pinnedgap0/manualanchor0/native12/release2/retention pass; overall resume/history remain unaccepted. Four reports/12PNGs retained, long/read/failure inspected. Source now captures pre-layout wheel intent with modifier/nested-scroll exclusions and event-order/negative regressions; independent source review no material finding. CI and the same native repro must verify the correction. [Exact proof](VERIFICATION.md#native-resume-race-diagnosed--30-october-2145-utc).
 
