@@ -95,6 +95,8 @@ const components: Components = {
   table: MarkdownTable,
 };
 const plugins = [remarkGfm];
+// Foreground updates must skip parsing while the deferred text is unchanged.
+const MarkdownRenderer = memo(ReactMarkdown);
 
 export const Markdown = memo(function Markdown({
   content,
@@ -104,9 +106,13 @@ export const Markdown = memo(function Markdown({
   const deferred = useDeferredValue(content);
   return (
     <div className="markdown">
-      <ReactMarkdown skipHtml remarkPlugins={plugins} components={components}>
+      <MarkdownRenderer
+        skipHtml
+        remarkPlugins={plugins}
+        components={components}
+      >
         {deferred}
-      </ReactMarkdown>
+      </MarkdownRenderer>
     </div>
   );
 });

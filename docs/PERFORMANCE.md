@@ -2,7 +2,7 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
-Active next slice: `PV-PERF-003` adds bounded CPU attribution to the existing second native stream, keeping the first typing benchmark unprofiled. No renderer optimization or measured improvement yet. [Capture plan, interpretation and pending verification](CPU-PROFILING.md).
+Two `PV-PERF-003` native CPU baselines passed at0bc99e4: ScriptDuration14.761470/14.799151s, Markdown exclusive sample shares48.71/48.79%, with full interaction/retention acceptance. Active `PV-PERF-004` memoizes the expensive child receiving deferred text; CI and equivalent candidate profiles are pending. No measured CPU/RAM improvement yet. [Baseline, experiment and interpretation](CPU-PROFILING.md).
 
 ## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
 

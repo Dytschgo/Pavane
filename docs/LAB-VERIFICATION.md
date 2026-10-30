@@ -1,5 +1,11 @@
 # Pavane Windows lab run
 
+## Current CPU baseline checkpoint — 30 October, 22:54 UTC
+
+CI41138692946 passed0bc99e4; two hash-bound native runs `20261030T223935Z-e868435372c4` and `20261030T224900Z-1ca5a6f88efd` passed native12/release2/full interaction-retention and complete CPU capture. Same workload/runtime/binary, ScriptDuration14.761470/14.799151s, Markdown exclusive shares48.71/48.79%. Five reports/12PNGs retained per run; long/read/history inspected. [Full provenance](VERIFICATION.md#cpu-baselines-and-memoization-experiment--30-october-2026), [comparison contract](CPU-PROFILING.md). These are baselines, not a CPU/RAM improvement.
+
+Both root-owned supported disposals completed: c0617b80d0d14a5195d30397efc028e3 at22:48:11Z Boot14→15, then4e7c93ab67894336866392f884c39ef8 at22:53:40Z Boot15→16; each restart1/cleanup1/task-observer-workspace proof. Historical unknown/exit0 remains, cleanuptrue/aborted-by-reset/reservationsretired. Fresh22:54:26Z ready+desktop/available/noreservation; refresh before new ownership. No active job/recovery/maintenance. Installed2.4.8/exact policy/verifier/desktop1800/noLiveCodex/noinstall unchanged. No local app/tests/builds/UI. Memoization candidate now awaits CI, then two equivalent new owned observations; never replay old guards or infer reuse from command exit.
+
 ## Current accepted checkpoint — 30 October, 22:00 UTC
 
 Requested301cae4 passed CI41133689030/job124330750778 and actual hash-bound lab `20261030T215451Z-82308f5fa2a2`. Native12/release2/full performance passed: pinnedgap0, manualanchor0px during15472px growth, active-stream resume at91sections followed80888px more to gap0, history100→110 anchor0.1875px, exact reply/draft reload and typing budgets. All4reports/12PNGs retained and inspected. [Exact source/build/artifact identities and scope](VERIFICATION.md#complete-scroll-follow-acceptance--30-october-2200-utc). Unsigned tested executable copied without launch to ignored `evidence/ci-build-301cae4/`; no installer/release or guest Codex proof.
