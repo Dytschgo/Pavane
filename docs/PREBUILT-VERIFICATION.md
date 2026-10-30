@@ -1,5 +1,7 @@
 # Prebuilt Windows UI verification
 
+Current boundary: do not run the local build/test steps below on Dylan's computer. Use the [CI-built input route](#ci-built-input-while-local-testing-is-prohibited) while local testing is stopped. Source editing/formatting and read-only review remain allowed.
+
 The lab has Node/pnpm/WebView2 but no Cargo in the observed desktop environment. Its policy forbids installing tools. Use a locally built, source-bound executable for native UI tests; keep Rust/static checks in local development and Windows CI. This mode is explicit in the report and does not claim a guest build, Rust tests or real provider inference. UI-only runtime minimum is Node 22.16; source builds remain Node 24+. Read-only pinned observation on 30 October found Node 22.23.3 and pnpm 11.25.0. Reports record actual versions.
 
 1. Commit the candidate's source/harness changes. Run `pnpm check` and `pnpm test:verification`; use the existing Rust gates for application changes.
@@ -9,6 +11,14 @@ The lab has Node/pnpm/WebView2 but no Cargo in the observed desktop environment.
 5. Inspect `verification.json`, `native-smoke.json`, `release-smoke.json` and captures exported to `AGENTLAB_EVIDENCE_DIR`. Each UI report identifies prebuilt mode, the source revision/manifest and executable hash. Build tool versions describe the build computer; runtime Node/platform describe the guest. Hash binding is provenance for this trusted workflow, not a signature or security sandbox.
 
 The manifest and executable must be transported as ordinary untracked source inputs; neither `verification-input/` nor its parent may be excluded from synchronization. `.crabbox/` is transport output and is ignored/preserved. After the run has settled, retain the input privately or move that exact directory out of the checkout before ordinary source-only verification. Do not delete user data or reuse a failed/unknown managed attempt.
+
+## CI-built input while local testing is prohibited
+
+Dylan subsequently stopped local tests/builds while working on this PC. Do not execute steps 1–2 locally under that boundary. The existing Windows CI job now runs the checks and fixed preparation command once, then uploads only `pavane.exe` and `manifest.json` as `pavane-windows-<event-head-SHA>` with seven-day retention. This is an unsigned verification artifact, not an installer or public release. No auth, SQLite, logs or broader build output is uploaded.
+
+After CI completes, verify the run's repository/event head/conclusion and exact artifact identity before downloading it into private retention. Check archive digest where supplied by GitHub, inspect that the archive contains exactly the two expected regular files, then stage those exact files as ordinary nonignored `verification-input/` transport inputs. Check all manifest file/binary hashes against the frozen local candidate before dispatch; do not execute the candidate on this computer. On pull requests GitHub checks out a synthetic merge revision; the manifest records that actual build revision separately from `ci.requestedRevision` (the PR head) and the workflow run identity. Source hashes must still match the intended checkout; a matching event head alone is not enough. Do not rewrite the build revision to the PR head.
+
+The supported guest verifier also runs `performance-smoke.mjs --label candidate`, exporting a bounded synthetic report and long-chat/history captures. It asserts typed draft/full reply persistence and preservation of the visible message across the native 100-message page boundary. Runtime validation of newly edited code remains pending until CI and the lab actually pass. LabManager's current maintenance turn must finish before any new adapter/dispatch call.
 
 In UI-only mode dependency restore uses `--frozen-lockfile --ignore-scripts`. Child-only Corepack network/auto-pin/project switching is disabled; pnpm 11 uses `pnpm_config_pm_on_fail=ignore`, and pnpm 10 uses `npm_config_manage_package_manager_versions=false`. No global config is written and prior process values are restored. These controls prevent the `packageManager` build pin from silently downloading a toolchain. See [pnpm settings](https://github.com/pnpm/pnpm.io/blob/main/docs/settings/cli.md) and [Node module metadata support](https://nodejs.org/api/esm.html#importmetadirname). This UI path executes no Vite/esbuild build scripts.
 

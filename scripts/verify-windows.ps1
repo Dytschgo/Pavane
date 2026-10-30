@@ -71,6 +71,7 @@ try {
         Invoke-Check 'optimized Codex model picker, streaming, interrupt and job containment' { node scripts/codex-smoke.mjs --release }
     }
     Invoke-Check 'bundled release workflows and owned process-tree measurements' { node scripts/release-smoke.mjs }
+    Invoke-Check 'long Markdown typing and native history reading position' { node scripts/performance-smoke.mjs --label candidate }
     $binaryPath = if ($prebuilt) { 'verification-input/pavane.exe' } else { 'target/release/pavane.exe' }
     $binary = Get-Item -LiteralPath (Join-Path $repository $binaryPath)
     $report = [ordered]@{
@@ -98,7 +99,7 @@ try {
     foreach ($setting in $packageManagerEnvironment.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable($setting.Key, $setting.Value, 'Process')
     }
-    $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-final.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-unicode-limit.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png', 'release-smoke.json', 'release-empty.png', 'release-draft.png')
+    $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-final.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-unicode-limit.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png', 'release-smoke.json', 'release-empty.png', 'release-draft.png', 'performance-candidate.json', 'performance-candidate-long.png', 'performance-candidate-history.png')
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()
     $collected.Add('verification.json')

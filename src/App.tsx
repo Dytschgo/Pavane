@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
@@ -111,6 +118,12 @@ export function App() {
   const listVersion = useRef(0);
   const searchActivated = useRef(false);
   const end = useRef<HTMLDivElement>(null);
+  const conversation = useRef<HTMLDivElement>(null);
+  const prependAnchor = useRef<{
+    chatId: string;
+    element: HTMLElement;
+    top: number;
+  } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const nearBottom = useRef(true);
   const liveMessages = useRef(new Map<string, Message>());
@@ -239,6 +252,20 @@ export function App() {
 
   useEffect(() => {
     if (nearBottom.current) end.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
+
+  useLayoutEffect(() => {
+    const anchor = prependAnchor.current;
+    if (!anchor) return;
+    prependAnchor.current = null;
+    const area = conversation.current;
+    if (
+      !area ||
+      currentRef.current !== anchor.chatId ||
+      !area.contains(anchor.element)
+    )
+      return;
+    area.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top;
   }, [messages]);
 
   useEffect(() => {
@@ -640,6 +667,19 @@ export function App() {
     try {
       const history = await api.messages(target, messages[0].sequence);
       if (currentRef.current !== target) return;
+      const area = conversation.current;
+      if (area) {
+        const edge = area.getBoundingClientRect().top;
+        const element = [
+          ...area.querySelectorAll<HTMLElement>(".message"),
+        ].find((item) => item.getBoundingClientRect().bottom > edge);
+        if (element)
+          prependAnchor.current = {
+            chatId: target,
+            element,
+            top: element.getBoundingClientRect().top,
+          };
+      }
       nearBottom.current = false;
       setMessages((previous) => [...history.items, ...previous]);
       setMoreHistory(history.hasMore);
@@ -1051,6 +1091,7 @@ export function App() {
           {showChat ? (
             <>
               <div
+                ref={conversation}
                 className={`conversation ${messages.length ? "has-messages" : ""}`}
                 onScroll={(event) => {
                   const el = event.currentTarget;

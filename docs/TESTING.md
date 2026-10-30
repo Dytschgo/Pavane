@@ -1,5 +1,7 @@
 # Verification on Windows
 
+Latest boundary: Dylan is working on this computer and explicitly stopped local Pavane tests. Do not run app tests, builds, benchmarks or UI automation here. Source editing/formatting and read-only review remain local; CI builds/tests and supported lab desktop jobs provide executable verification. Older local-testing permission below is historical and superseded.
+
 Use a fresh checkout, Node.js 24+, pnpm 10.34.5, stable MSVC Rust, C++ build tools and WebView2.
 
 For a lab without Rust, use the [source-bound prebuilt UI path](PREBUILT-VERIFICATION.md). It runs the real bundled app and records its reduced scope; it does not install a toolchain or replace the source/build gates.

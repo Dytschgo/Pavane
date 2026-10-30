@@ -21,6 +21,7 @@ export async function verificationContext(root, executable, profile) {
       executable: { profile, ...manifest.binary },
       buildRust: manifest.buildRust,
       buildNode: manifest.buildNode,
+      ci: manifest.ci ?? null,
       platform: process.platform,
       architecture: process.arch,
       node: process.version,

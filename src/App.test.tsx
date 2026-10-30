@@ -93,6 +93,55 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it("keeps the visible message in place when an earlier page is prepended", async () => {
+  const visible = {
+    ...sentTurn.user,
+    id: "visible",
+    sequence: 3,
+    content: "Visible anchor",
+  };
+  const older = {
+    ...visible,
+    id: "older",
+    sequence: 1,
+    content: "Older message",
+  };
+  mocked.messages.mockImplementation((_chatId: string, before?: number) =>
+    Promise.resolve(
+      before
+        ? { items: [older], hasMore: false }
+        : { items: [visible], hasMore: true },
+    ),
+  );
+  render(<App />);
+  const original = await screen.findByText("Visible anchor");
+  const area = screen.getByLabelText("Conversation");
+  area.scrollTop = 10;
+  const geometry = vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: HTMLElement) {
+      if (this === area) return new DOMRect(0, 0, 800, 600);
+      if (this.classList.contains("message"))
+        return new DOMRect(
+          0,
+          screen.queryByText("Older message") ? 200 : 100,
+          800,
+          80,
+        );
+      return new DOMRect();
+    });
+  try {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Load earlier messages" }),
+    );
+    await screen.findByText("Older message");
+    expect(screen.getByText("Visible anchor")).toBe(original);
+    expect(area.scrollTop).toBe(110);
+  } finally {
+    geometry.mockRestore();
+  }
+});
+
 it("waits for startup discovery without losing the draft, then sends the default Codex model with explicit settings", async () => {
   const catalog = {
     models: [

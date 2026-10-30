@@ -70,6 +70,15 @@ const manifest = {
   files,
   sourceSha256: digest(JSON.stringify(files)),
   binary: { bytes: binary.length, sha256: digest(binary) },
+  ci:
+    process.env.GITHUB_ACTIONS === "true"
+      ? {
+          repository: process.env.GITHUB_REPOSITORY,
+          runId: process.env.GITHUB_RUN_ID,
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+          requestedRevision: process.env.PAVANE_REQUESTED_REVISION ?? null,
+        }
+      : null,
 };
 await mkdir(join(root, inputDirectory), { recursive: true });
 await copyFile(

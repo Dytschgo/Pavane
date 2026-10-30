@@ -1,5 +1,7 @@
 # Pavane Windows lab run
 
+New source work (`PV-PERF-002`) is not covered by the old acceptance below. It repairs a measured history-reading jump and adds a long-stream/history fixture. Local testing/builds are now prohibited while Dylan works; the next binary must come from CI. LabManager is preparing 2.4.8 and holds the next runner turn/runtime swap; no new adapter or dispatch calls until its explicit final handoff. The last verified executable remains the older candidate below until new CI and native lab checks pass.
+
 ## Current acceptance — 30 October, 18:55 UTC
 
 Actual prebuilt UI run `20261030T185029Z-544145d70218` passed, exit 0, 54.3046 seconds guest execution / 82.2780 seconds overall. Candidate `3f82cde87d64a8aac962cd0ffba8ded2a278e195`; job `job-bd50e805a2424c37971c1c2c9195df42`, reservation `reservation-12bb972756d243d3baa76a1d1c66bcc7`, request `pavane-3f82cde-ui-windows-001`. Exact core invocation unchanged. The guest verified 55 source/harness/asset files plus the executable against the prepared manifest, restored locked dependencies with existing Node 22.23.3/pnpm 11.25.0 and disabled install scripts/package-manager downloads, then passed 12 native workflows and two release checks. All 12 synthetic exports were retained, including nine screenshots inspected by root. No guest Rust build/tests or live Codex inference. See [full evidence and limitations](VERIFICATION.md#prebuilt-ui-acceptance-on-the-lab--30-october-2026).
