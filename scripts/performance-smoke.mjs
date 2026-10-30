@@ -3,11 +3,12 @@ import { createServer } from "node:http";
 import { createServer as portProbe } from "node:net";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
+import { summarizeCpuProfile } from "./cpu-profile.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const labelIndex = process.argv.indexOf("--label");
@@ -120,6 +121,76 @@ const report = () =>
   );
 await report();
 let child, browser, launchError, page;
+let cpuSession,
+  cpuBefore,
+  cpuActive = false;
+async function finishCpuProfile(captureState) {
+  if (!cpuActive) return;
+  const after = await cpuSession.send("Performance.getMetrics");
+  const { profile: sampled } = await cpuSession.send("Profiler.stop");
+  cpuActive = false;
+  const attribution = summarizeCpuProfile(sampled);
+  if (captureState === "complete")
+    assert.ok(
+      attribution.sampleCount >= 100,
+      "CPU capture has too few samples for attribution",
+    );
+  assert.ok(
+    attribution.inclusiveAssets.some(
+      (row) => row.asset.startsWith("asset:") && row.samples > 0,
+    ),
+    "CPU profile did not observe owned bundled JavaScript",
+  );
+  const counter = (name) => {
+    const delta =
+      after.metrics.find((m) => m.name === name)?.value -
+      cpuBefore.metrics.find((m) => m.name === name)?.value;
+    assert.ok(
+      Number.isFinite(delta) && delta >= 0,
+      `Invalid ${name} counter window`,
+    );
+    return delta;
+  };
+  const document = {
+    captureState,
+    capturedAt: new Date().toISOString(),
+    context,
+    browser: browser.version(),
+    samplingIntervalUs: 1000,
+    workload: {
+      phase: "second-stream-manual-reading-and-resume",
+      sections: 300,
+      intervalMs: 50,
+      outputBytes: Buffer.byteLength(longText),
+      sha256: createHash("sha256").update(longText).digest("hex"),
+      provider: "synthetic Ollama-compatible loopback",
+      concurrentTyping: false,
+      includesReadingScreenshot: true,
+      warmup:
+        "after the unprofiled full stream and its SQLite reload; no forced garbage collection",
+    },
+    counters: {
+      scriptSeconds: counter("ScriptDuration"),
+      layoutSeconds: counter("LayoutDuration"),
+      taskSeconds: counter("TaskDuration"),
+    },
+    attribution,
+    note: "Sampling is enabled only for the second stream. The first typing benchmark is unprofiled. A complete capture is attribution evidence, not a whole-app test verdict or a speedup. Match workload/build/runtime/sampling conditions before comparison. Raw profile/source text/URLs are not exported.",
+  };
+  const encoded = JSON.stringify(document);
+  assert.ok(
+    Buffer.byteLength(encoded) <= 60 * 1024,
+    "CPU attribution report exceeds its export bound",
+  );
+  const file = `cpu-profile-${label}.json`;
+  await writeFile(join(evidence, file), encoded + "\n");
+  result.cpuProfile = {
+    file,
+    captureState,
+    sampleCount: attribution.sampleCount,
+    durationMs: attribution.durationMs,
+  };
+}
 try {
   await freePort();
   child = spawn(executable, ["--profile", profile], {
@@ -305,6 +376,7 @@ try {
     await page.screenshot({
       path: join(evidence, `performance-${label}-long.png`),
     });
+    await session.detach();
     await page.reload();
     await editor.waitFor();
     await page.waitForFunction(
@@ -371,6 +443,15 @@ try {
           { passive: true },
         );
     });
+    result.phase = "cpu-profile-start";
+    // Attach after reload so counters/sampling belong to the current target.
+    cpuSession = await page.context().newCDPSession(page);
+    await cpuSession.send("Performance.enable");
+    await cpuSession.send("Profiler.enable");
+    await cpuSession.send("Profiler.setSamplingInterval", { interval: 1000 });
+    await cpuSession.send("Profiler.start");
+    cpuActive = true;
+    cpuBefore = await cpuSession.send("Performance.getMetrics");
     await editor.fill("LONG_STREAM");
     await page
       .getByRole("button", { name: "Send message", exact: true })
@@ -491,6 +572,8 @@ try {
       (height) => document.querySelector(".conversation").scrollHeight - height,
       resumed.scrollHeight,
     );
+    result.phase = "cpu-profile-stop";
+    await finishCpuProfile("complete");
     await report();
   }
   // Seed history through the actual native public chat/run commands, then open
@@ -660,6 +743,19 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  if (cpuActive) {
+    try {
+      await finishCpuProfile("partial");
+    } catch (error) {
+      result.cpuProfileError = String(error);
+      result.result = "failed";
+      process.exitCode = 1;
+    }
+  }
+  if (cpuSession) {
+    await cpuSession.send("Profiler.disable").catch(() => {});
+    await cpuSession.detach().catch(() => {});
+  }
   await report();
   if (browser) await browser.close().catch(() => {});
   if (child?.pid && child.exitCode === null && child.signalCode === null) {

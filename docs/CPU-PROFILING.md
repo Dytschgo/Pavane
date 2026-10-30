@@ -1,0 +1,23 @@
+# Long-stream CPU attribution
+
+`PV-PERF-003` is working. The accepted scroll/read/resume/persistence behavior remains at301cae4. This change instruments the native verification fixture only; it does not change Markdown rendering, provider cadence, persistence or dependencies. CI and actual lab capture are pending. No CPU/RAM improvement is claimed.
+
+## Capture
+
+The exact guest command remains `& .\scripts\verify-windows.ps1`, desktop true,1800seconds, using a newly hash-checked CI artifact and existing guest Node/pnpm. The fixture runs serially with isolated SQLite/WebView data and a synthetic loopback provider; no real inference or auth transfer. Dylan's PC is for source edits/formatting/review and artifact inspection only.
+
+The first300-section/50ms stream and concurrent typing benchmark stay unprofiled. After its exact SQLite reload, the existing second300-section stream is sampled through the owned WebView's [Chrome Profiler API](https://chromedevtools.github.io/devtools-protocol/tot/Profiler/) at1000microseconds. This window includes sending, manual upward reading, its screenshot, wheel-to-bottom, resumed growth and terminal rendering; no concurrent typing. It follows a previous large response/reload without forced GC, so deferred garbage collection is part of these warm-session conditions. Record browser/runtime, source/binary identity, output byte count/SHA256, interval, profile duration and separate Script/Layout/Task counters.
+
+`cpu-profile-candidate.json` is allowlisted for guest export, including failure/finally collection. It contains a complete or partial capture state, provenance, counters and bounded attribution. `performance-candidate.json` references it. Missing/malformed samples, timestamps outside the capture window, invalid counter deltas, fewer than100samples in a complete capture or absent owned bundle frames fail explicitly; a sampling failure is not an app optimization result. The sampler stops after terminal rendering; an active sampler is stopped as partial on failure and disabled before closing the owned browser/app. A complete capture means the profiling window completed, not that every app check passed; use the overall performance/verification verdict as well.
+
+## Interpretation and limits
+
+- Rankings use observed sample counts/shares, not precise CPU duration or preceding time-delta weights. Start/end, first/last sample offsets, mean spacing and unsampled tail stay visible. Irregular sampling limits inference; do not equate counts with ScriptDuration or OS CPU utilization.
+- Exclusive asset counts partition samples; omitted top20asset counts remain visible. Inclusive counts include each asset once per stack but overlap across different assets. Recursion within one asset does not multiply its ownership.
+- Output retains top20frames and eight stacks, with at most16innermost frames per stack. Names/locations may be minified; use bundle ownership and call paths before claiming a particular parser/function is responsible. Runtime idle/program/GC remain separate.
+- Only owned `tauri.localhost/assets/*.js` basenames/locations and bounded printable function names are retained. Unknown URLs/names are hidden. Raw profile nodes, complete URLs, source text and messages are not exported. Node/sample/depth bounds and a60KiBreport limit reject oversized data. The aggregate is compact JSON for bounded artifact readback.
+- Profiling overhead and the manual-read/resume window differ from the unprofiled typing scenario. Compare future candidates only with equivalent workload, warmup, runtime, build profile and sampling conditions. Typing responsiveness alone does not prove reduced CPU or RAM.
+
+Pure-data regressions cover exclusive-count conservation, recursive inclusive ownership, malformed/disconnected/oversized input, inconsistent timestamp horizons, asymmetric sample gaps, URL/name redaction and bounded top rows. They run through `pnpm test:verification` in CI. Independent source review caught the missing cumulative-horizon validation and questioned preceding-delta weighting; both were corrected directly by validating the horizon and using sample-count rankings. Follow-up corrections were source-inspected, not independently re-reviewed. Source formatting ran locally; these tests and the real collector have not run for this candidate yet.
+
+Once actual attribution exists, choose the smallest justified renderer change, preserve the accepted scroll/history/full-text/draft assertions, and collect equivalent before/after evidence. If minified ownership is insufficient, improve attribution before optimizing. Rollback removes the sampler/helper/export and restores the prior verification script; accepted app behavior needs no rollback.

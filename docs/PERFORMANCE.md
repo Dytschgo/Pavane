@@ -2,6 +2,8 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
+Active next slice: `PV-PERF-003` adds bounded CPU attribution to the existing second native stream, keeping the first typing benchmark unprofiled. No renderer optimization or measured improvement yet. [Capture plan, interpretation and pending verification](CPU-PROFILING.md).
+
 ## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
 
 CI `41133689030` passed requested `301cae48ccd7bb9fe638ddce77975493b0104aa0`, including the event-order and negative gesture regressions. Actual merge build `6b7cc9a492b84cfd932741ef65e9950c95d3da6e`; artifact `13014841216`, ZIP `ddda58faaf6ef5f06d25e01d6a544f991f9799827744eaeb97ef2b347a0d1114`. All56source hashes and executable were verified before dispatch. [Full identities](VERIFICATION.md#complete-scroll-follow-acceptance--30-october-2200-utc).

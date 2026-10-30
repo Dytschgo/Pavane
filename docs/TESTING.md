@@ -67,4 +67,6 @@ The optional `--profile NAME` database selection works in both builds. Names use
 
 Inspect long/read/history captures and JSON before accepting the result. A timeout preserves phase, bounded synthetic wheel/scroll trace, failure viewport/stack and an allowlisted failure PNG. Do not replace missing active-stream growth with a final scroll or turn a failed wait into a pass. Full source-bound acceptance exists at301cae4; rerun for changed behavior/harness or a new unresolved concern, not an unchanged documentation checkpoint. [Measured proof and limits](PERFORMANCE.md).
 
+The next harness adds a CPU sampler only to the second manual-read/resume stream, preserving the unprofiled typing window. Its bounded `cpu-profile-candidate.json` distinguishes capture completeness from the overall test verdict. Validate complete attribution and owned bundle samples before drawing a conclusion; partial/missing data is not a speedup. [CPU capture and pending proof](CPU-PROFILING.md).
+
 Keep all evidence synthetic. Do not commit SQLite files, raw provider logs, tokens or user messages. The executable's size, renderer transfer size and idle process memory are different measurements. Record the build mode, device, process tree and workload before stating any performance number. No regression comparison exists for this new repository.
