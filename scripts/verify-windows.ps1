@@ -100,6 +100,7 @@ try {
         [Environment]::SetEnvironmentVariable($setting.Key, $setting.Value, 'Process')
     }
     $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-final.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-unicode-limit.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png', 'release-smoke.json', 'release-empty.png', 'release-draft.png', 'performance-candidate.json', 'performance-candidate-long.png', 'performance-candidate-history.png')
+    $artifacts += 'performance-candidate-reading.png'
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()
     $collected.Add('verification.json')

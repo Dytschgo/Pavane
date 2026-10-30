@@ -117,8 +117,9 @@ export function App() {
   const draftVersion = useRef(0);
   const listVersion = useRef(0);
   const searchActivated = useRef(false);
-  const end = useRef<HTMLDivElement>(null);
   const conversation = useRef<HTMLDivElement>(null);
+  const messageList = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
   const prependAnchor = useRef<{
     chatId: string;
     element: HTMLElement;
@@ -126,6 +127,7 @@ export function App() {
   } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const nearBottom = useRef(true);
+  const showChat = view === "chat" || !!workspaceId;
   const liveMessages = useRef(new Map<string, Message>());
   const current =
     chats.find((chat) => chat.id === currentId) ??
@@ -250,9 +252,27 @@ export function App() {
     if (currentId) localStorage.setItem("pavane.selectedChat", currentId);
   }, [currentId]);
 
-  useEffect(() => {
-    if (nearBottom.current) end.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  const followLatest = useCallback(() => {
+    const area = conversation.current;
+    if (!area || !nearBottom.current) return;
+    area.scrollTop = area.scrollHeight;
+    lastScrollTop.current = area.scrollTop;
+  }, []);
+
+  useLayoutEffect(followLatest, [messages, followLatest]);
+
+  useLayoutEffect(() => {
+    const area = conversation.current;
+    const list = messageList.current;
+    if (!area || !list) return;
+    // Deferred Markdown commits and composer/window resizing can happen after
+    // the message effect. Follow the rendered size, not just provider events.
+    const observer = new ResizeObserver(followLatest);
+    observer.observe(list);
+    observer.observe(area);
+    followLatest();
+    return () => observer.disconnect();
+  }, [showChat, loading, messages.length, followLatest]);
 
   useLayoutEffect(() => {
     const anchor = prependAnchor.current;
@@ -764,7 +784,6 @@ export function App() {
   );
   const permanent = visibleChats.filter((chat) => !chat.expiresAt);
   const temporary = visibleChats.filter((chat) => chat.expiresAt);
-  const showChat = view === "chat" || !!workspaceId;
   const viewInfo = views.find((item) => item.id === view)!;
 
   function chatRows(list: Chat[]) {
@@ -1095,8 +1114,13 @@ export function App() {
                 className={`conversation ${messages.length ? "has-messages" : ""}`}
                 onScroll={(event) => {
                   const el = event.currentTarget;
-                  nearBottom.current =
+                  const atLatest =
                     el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                  // Growing content can emit scroll events without an upward
+                  // move. That must not turn a pinned reader into an unpinned one.
+                  if (el.scrollTop < lastScrollTop.current - 1 || atLatest)
+                    nearBottom.current = atLatest;
+                  lastScrollTop.current = el.scrollTop;
                 }}
                 aria-label="Conversation"
               >
@@ -1144,7 +1168,7 @@ export function App() {
                     </div>
                   </div>
                 ) : (
-                  <div className="message-list">
+                  <div className="message-list" ref={messageList}>
                     {moreHistory && (
                       <Button
                         variant="ghost"
@@ -1168,7 +1192,6 @@ export function App() {
                         onError={report}
                       />
                     ))}
-                    <div ref={end} />
                   </div>
                 )}
               </div>

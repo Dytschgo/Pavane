@@ -331,6 +331,119 @@ try {
     result.checks.push(
       "long streamed Markdown and concurrent typing survive native SQLite reload exactly",
     );
+
+    // Exercise deliberate reading separately from the typing-only pinned repro.
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        !document.querySelector("#prompt").disabled &&
+        document.querySelectorAll("article.message").length === 0,
+    );
+    await editor.fill("LONG_STREAM");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => document.querySelectorAll(".markdown h2").length >= 40,
+    );
+    const conversation = page.getByLabel("Conversation", { exact: true });
+    const bounds = await conversation.boundingBox();
+    assert.ok(bounds, "Conversation viewport is missing");
+    await page.mouse.move(bounds.x + 12, bounds.y + 100);
+    await page.mouse.wheel(0, -1500);
+    await page.waitForFunction(() => {
+      const area = document.querySelector(".conversation");
+      return area.scrollHeight - area.scrollTop - area.clientHeight > 1000;
+    });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    const reading = await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      const bounds = area.getBoundingClientRect();
+      window.__readingAnchor = [
+        ...document.querySelectorAll(".markdown h2, .markdown p"),
+      ].find((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+      });
+      if (!window.__readingAnchor) throw new Error("No visible reading anchor");
+      return {
+        top: window.__readingAnchor.getBoundingClientRect().top,
+        text: window.__readingAnchor.textContent,
+        sectionCount: document.querySelectorAll(".markdown h2").length,
+        scrollHeight: area.scrollHeight,
+      };
+    });
+    assert.ok(
+      reading.sectionCount < 240,
+      "Reading scenario began too late in the stream",
+    );
+    await page.waitForFunction(
+      (count) => document.querySelectorAll(".markdown h2").length >= count,
+      reading.sectionCount + 40,
+    );
+    const readAfter = await page.evaluate(() => ({
+      top: window.__readingAnchor.getBoundingClientRect().top,
+      text: window.__readingAnchor.textContent,
+      connected: window.__readingAnchor.isConnected,
+      scrollHeight: document.querySelector(".conversation").scrollHeight,
+    }));
+    result.reading = {
+      sectionCountBefore: reading.sectionCount,
+      addedHeightPx: readAfter.scrollHeight - reading.scrollHeight,
+      anchorShiftPx: Math.abs(readAfter.top - reading.top),
+      sameText: readAfter.connected && reading.text === readAfter.text,
+    };
+    await report();
+    await page.screenshot({
+      path: join(evidence, `performance-${label}-reading.png`),
+    });
+    // Real downward input returns to latest; subsequent growth must follow again.
+    await page.mouse.wheel(0, 10000000);
+    await page.waitForFunction(() => {
+      const area = document.querySelector(".conversation");
+      return area.scrollHeight - area.scrollTop - area.clientHeight <= 24;
+    });
+    const resumed = await page.evaluate(() => ({
+      sectionCount: document.querySelectorAll(".markdown h2").length,
+      scrollHeight: document.querySelector(".conversation").scrollHeight,
+      active: !!document.querySelector('button[aria-label="Stop responses"]'),
+    }));
+    assert.ok(
+      resumed.active && resumed.sectionCount < 260,
+      "Must resume during an active stream",
+    );
+    await page.waitForFunction(
+      (count) => document.querySelectorAll(".markdown h2").length >= count,
+      resumed.sectionCount + 20,
+    );
+    await page.getByText("END_LONG_RESPONSE", { exact: true }).waitFor();
+    await page
+      .getByRole("button", { name: "Stop responses" })
+      .waitFor({ state: "hidden" });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    result.reading.resumedGapPx = await page.evaluate(() => {
+      const area = document.querySelector(".conversation");
+      return Math.max(
+        0,
+        area.scrollHeight - area.scrollTop - area.clientHeight,
+      );
+    });
+    result.reading.resumedSectionCount = resumed.sectionCount;
+    result.reading.growthAfterResumePx = await page.evaluate(
+      (height) => document.querySelector(".conversation").scrollHeight - height,
+      resumed.scrollHeight,
+    );
+    await report();
   }
   // Seed history through the actual native public chat/run commands, then open
   // it through the UI. No database editing or production-only fixture endpoint.
@@ -448,6 +561,20 @@ try {
     violations.push("stream typing maximum");
   if (result.stream && result.stream.follow.gapPx > result.budgets.followGapPx)
     violations.push("stream auto-follow");
+  if (
+    result.reading &&
+    (!result.reading.sameText ||
+      result.reading.addedHeightPx <= 0 ||
+      result.reading.anchorShiftPx > result.budgets.historyAnchorShiftPx)
+  )
+    violations.push("manual reading position during streaming");
+  if (
+    result.reading &&
+    result.reading.resumedGapPx > result.budgets.followGapPx
+  )
+    violations.push("stream follow after returning to latest");
+  if (result.reading && result.reading.growthAfterResumePx <= 0)
+    violations.push("no content growth after resuming follow");
   if (
     !result.history.sameText ||
     result.history.anchorShiftPx > result.budgets.historyAnchorShiftPx

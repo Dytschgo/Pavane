@@ -26,6 +26,7 @@ const mocked = vi.hoisted(() => ({
   createWorkspace: vi.fn(),
   send: vi.fn(),
 }));
+let resizeContent: ResizeObserverCallback;
 vi.mock("./lib/api", () => ({
   native: true,
   api: mocked,
@@ -81,6 +82,17 @@ function connectSol() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeContent = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   localStorage.clear();
   Element.prototype.scrollIntoView = vi.fn();
   mocked.listChats.mockResolvedValue([first, second]);
@@ -91,7 +103,47 @@ beforeEach(() => {
   mocked.createChat.mockResolvedValue(second);
   mocked.catalog.mockResolvedValue({ models: [], providers: [] });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+it("follows deferred content growth without undoing upward reading", async () => {
+  mocked.messages.mockResolvedValue({ items: [sentTurn.user], hasMore: false });
+  render(<App />);
+  await screen.findByText("Hello");
+  const area = screen.getByLabelText("Conversation");
+  let height = 1500;
+  let top = 0;
+  Object.defineProperties(area, {
+    scrollHeight: { get: () => height },
+    clientHeight: { value: 500 },
+    scrollTop: {
+      get: () => top,
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, height - 500));
+      },
+    },
+  });
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(area.scrollTop).toBe(1000);
+  fireEvent.scroll(area);
+  height = 2200;
+  fireEvent.scroll(area); // Content grew; the reader did not scroll upward.
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(area.scrollTop).toBe(1700);
+  fireEvent.scroll(area);
+  area.scrollTop = 900;
+  fireEvent.scroll(area);
+  height = 3000;
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(area.scrollTop).toBe(900);
+  area.scrollTop = 2500;
+  fireEvent.scroll(area);
+  height = 3600;
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(area.scrollTop).toBe(3100);
+});
 
 it("keeps the visible message in place when an earlier page is prepended", async () => {
   const visible = {

@@ -1,6 +1,6 @@
 # Long chat and history measurements
 
-Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab after LabManager's current maintenance hold ends.
+Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
 ## Verified pagination acceptance
 
@@ -10,9 +10,15 @@ Actual lab run `20261030T203335Z-9bd856deb443` passed:12native workflows,two sta
 
 All15allowlisted exports were retained:4JSON reports and11PNG captures, all inspected. The guest ran existing Node22.23.3/pnpm11.25.0; Rust compilation/tests ran in CI, no guest Rust/tool installation or live Codex inference. Guest execution69.5068s,total97.9937s. Source transport recorded77files/SHA-256 `E0C77F4875C2761169DFF427FF19C7882AAE3E79ACFE5AF660118BBC542821EE`, expected dirty state from two untracked transport inputs. Root then completed supported disposal `9b2115c418724e1da3240fcb848a5487` at20:38:53.329717Z, BootId9→10,restart1/cleanup1, task/observer/workspace acknowledgement; fresh20:40:40Zprobe ready/desktop and status available/no reservation. Retained command pass and administrative cleanup remain separate records. Evidence is ignored under `evidence/lab-20261030T203335Z-9bd856deb443`.
 
-## Next focused auto-follow check
+## Auto-follow reproduced in the lab
 
-The long-response capture still showed early sections after the end marker existed in the document. That warrants a focused viewport-follow repro; it is not a diagnosed cause or completed behavior fix. The next fixture addition records the initial/final bottom gap and focus after two frames. With a fresh chat initially pinned and only composer typing (no wheel/page-up/conversation scrolling), it asserts a24px maximum final gap. This new assertion was added AFTER the successful run above and has not executed yet. CI/lab must establish its result; no local app/tests/builds/UI execution is authorized. Preserve separate coverage for intentionally scrolling upward before changing follow behavior.
+The added viewport assertion went red on requested head `d5e28c6474f1fc64e94ddca693288323eb677549`, actual CI merge build `06c092a2358a742f73ac98ff7dc38fc18fb7844e`. CI run `41126446739` passed; the later native lab run `20261030T210004Z-5a9a83001d80` failed only `stream auto-follow`. The fixture began at bottom gap 0 and supplied only composer typing, with no conversation-scroll input. After the full response and two frames, gap was 115,349px, scrollTop 520px and viewport height 511px; the composer remained focused. The capture visibly stayed around Section 1. Typing p95 88.88ms and the history anchor 0.1875px passed. Native 12 and release two checks also passed; overall verification failed. This is an app assertion failure, not a missing toolchain or manager transport failure.
+
+The core loop remains the exact guest command `& .\scripts\verify-windows.ps1`, using its isolated real WebView and synthetic loopback stream. It takes about 71 seconds of guest execution because it also protects persistence, nearby native flows and history. A DOM mock cannot establish rendered follow behavior. All four reports and 11 PNGs were retained privately, alongside source provenance; the failure capture was inspected. No local app/test/build/UI execution occurred.
+
+Current candidate, not yet verified: observe rendered message-list and viewport resizing, including deferred Markdown commits; scroll only the conversation area while pinned. A scroll event without upward movement no longer disables following merely because content grew. Keep native anchoring and the explicit history compensation. The extended native fixture deliberately scrolls upward, holds a visible paragraph while at least 40 more sections render, then scrolls to latest during an active stream and requires further growth before checking resumed following. Existing 24px follow and 3px reading budgets remain unchanged. A component state regression supplements, but does not replace, native verification. Independent read-only review found a possible resume-fixture false pass; the fixture now requires active streaming and positive growth after returning. No additional material finding by inspection. CI and native red-to-green evidence are pending.
+
+Rollback removes the observer/direction changes and retains the failing native assertion; no persistence, provider or schema changes. CPU optimization remains separate work.
 
 ## Baseline captured before that boundary
 
