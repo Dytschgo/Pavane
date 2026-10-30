@@ -1,5 +1,11 @@
 # Pavane Windows lab run
 
+## Rejected experiment settled — 30 October, 23:44 UTC
+
+CI41144684424 passedf2c8f72; first native233642Z-01723ec1cff6 passed, repeat234029Z-7526d4861912 failed typingp95128.0864ms against unchanged120ms budget. Native12/release2/scroll/history/exact retention/complete profiling passed in both; layout overlaps baseline. No optimization acceptance or retry-to-green. App source restored to1804287; rollback CI pending, accepted user-test binary unchanged. Five reports/12 and13PNGs/source metadata retained; all12 first-run and repeat long/read/history/failure inspected. [Exact negative result](VERIFICATION.md#rendered-size-experiment-rejected--30-october-2026).
+
+Root disposals8710dca1234d4937a06ecb941da8b15d andef8c06882d9d492c853cec4932178853 completed23:40:13/23:44:27Z Boot18→19→20, each restart1/cleanup1/task-observer-workspace proof. Historical unknown/exit0 or exit1 preserved; cleanuptrue/aborted-by-reset/reservationsretired. Fresh23:44:39Z ready+desktop/available/noreservation; refresh before new ownership. No active job/recovery/maintenance. Installed2.4.8/exactpolicy/verifier/desktop1800/noLiveCodex/noinstall unchanged; local app/tests/builds/UI prohibited. Private guards/receipts/payload retained, no replay/release/ledger edits. Next justified turn is a changed feature after CI, not an unchanged timing retry.
+
 ## Current memoization checkpoint — 30 October, 23:15 UTC
 
 CI41141772561 passed requested1804287; actualbuild09d1d3acd9f1a144d5d9011b14c9f549f1dbb0f9. Two hash-bound native runs `20261030T230735Z-625d8f047280` and `20261030T231149Z-321d421c6c3b` passed native12/release2/full interaction-retention and complete CPU capture. ScriptDuration10.69–11.24s versus baseline14.76–14.80s, but layout and typing p95 rose, total-task ranges overlap. No broad CPU/latency/RAM win. Five reports/12PNGs+source metadata retained per run; all12 first-run and long/read/history repeat captures inspected. [Exact proof](VERIFICATION.md#memoization-comparison-accepted--30-october-2026), [comparison/tradeoffs](CPU-PROFILING.md). Latest unsigned tested executable copied without launch to ignored `evidence/ci-build-1804287/`.

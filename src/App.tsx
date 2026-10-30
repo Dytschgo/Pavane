@@ -259,12 +259,14 @@ export function App() {
     lastScrollTop.current = area.scrollTop;
   }, []);
 
+  useLayoutEffect(followLatest, [messages, followLatest]);
+
   useLayoutEffect(() => {
     const area = conversation.current;
     const list = messageList.current;
     if (!area || !list) return;
-    // Follow rendered Markdown and viewport growth, not raw provider updates
-    // that may leave the deferred content's geometry unchanged.
+    // Deferred Markdown commits and composer/window resizing can happen after
+    // the message effect. Follow the rendered size, not just provider events.
     const observer = new ResizeObserver(followLatest);
     observer.observe(list);
     observer.observe(area);

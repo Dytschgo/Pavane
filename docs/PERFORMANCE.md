@@ -2,7 +2,7 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
-`PV-PERF-004` passed CI1804287 and two matched native comparisons: less JavaScript work, higher layout work and typing p95, overlapping total-task ranges. Both full interaction/retention fixtures passed; no broad CPU/latency/RAM improvement is established. The memo boundary is retained for its narrow JavaScript saving. `PV-PERF-005` tracks remaining layout work; source inspection suggests checking redundant provider-event versus rendered-size following, not changing stream cadence or Markdown semantics without evidence. [Baseline, measurements and tradeoffs](CPU-PROFILING.md).
+PV-PERF-005 is rejected: one native pass followed by a typing-budget failure, with no clear layout benefit. App.tsx is restored byte-identical to accepted1804287; rollback CI pending. The earlier memo boundary remains for its measured JavaScript saving and documented layout/typing tradeoffs, not a broad CPU/RAM/latency win. No budgets changed or retry-to-green. [Negative experiment and limits](CPU-PROFILING.md#rejected-rendered-size-experiment--pv-perf-005). Next feature slice is editing saved bot/workspace instructions.
 
 ## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
 
