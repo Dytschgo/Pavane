@@ -1,6 +1,12 @@
 # Pavane Windows lab run
 
-## Current checkpoint — 30 October, 21:29 UTC
+## Current checkpoint — 30 October, 21:45 UTC
+
+Diagnostic CI545188d passed; actual hash-bound lab run `20261030T213849Z-5c0902fd5507` confirmed a resume race at the native wheel/scroll boundary. Wheel reaches oldmax34207, but387px growth arrives before the handler and it misses end intent. Pinnedgap0/manualanchor0/native12/release2/retention pass; overall resume/history remain unaccepted. Four reports/12PNGs retained, long/read/failure inspected. Source now captures pre-layout wheel intent with modifier/nested-scroll exclusions and event-order/negative regressions; independent source review no material finding. CI and the same native repro must verify the correction. [Exact proof](VERIFICATION.md#native-resume-race-diagnosed--30-october-2145-utc).
+
+Root supported disposal `362337d9e8284f6c98326e5bc74fd0b7` completed21:43:55Z, Boot12→13/task-observer-workspace proof; failed unknown/exit1 preserved, cleanuptrue/reservation retired. Fresh21:45Z probe ready+desktop/statusavailable/noreservation. No run/recovery or LabManager maintenance active. Installed2.4.8/policy/exact verifier/desktop1800/noLiveCodex/noinstall unchanged. Local app/tests/builds/UI remain prohibited. Root owns next distinct candidate turn after fresh readiness; old guards/token/payload retained privately, never replayed or released.
+
+## Earlier partial checkpoint — 30 October, 21:29 UTC
 
 CI `41129664403` passed requested `6c4e3d7`; actual merge build `267a51c8b58e76af110dce17b1324988147ce6fd`. Hash-checked CI-artifact lab run `20261030T212253Z-e3a5a7bcb3ea` passed native12/release2, pinned auto-follow (gap0), upward reading (anchor0px during15473px growth) and exact reply/draft reload. Overall failed on a subsequent60s resume wait; resumed-follow/history not established. Four reports/11PNGs retained, long/read captures inspected. Diagnostic-only fixture phase/input/viewport evidence is next; app behavior/input/budgets unchanged. No local app/tests/builds/UI. [Exact identities and limitations](VERIFICATION.md#partial-stream-follow-acceptance-resume-timeout--30-october-2129-utc).
 

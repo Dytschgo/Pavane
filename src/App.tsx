@@ -1112,6 +1112,41 @@ export function App() {
               <div
                 ref={conversation}
                 className={`conversation ${messages.length ? "has-messages" : ""}`}
+                onWheel={(event) => {
+                  if (event.ctrlKey || event.shiftKey || event.defaultPrevented)
+                    return;
+                  const area = event.currentTarget;
+                  if (
+                    !(event.target instanceof Element) ||
+                    !area.contains(event.target)
+                  )
+                    return;
+                  // Leave gestures in independently scrolling content alone.
+                  for (
+                    let node: Element | null = event.target;
+                    node && node !== area;
+                    node = node.parentElement
+                  ) {
+                    if (
+                      node.clientHeight > 0 &&
+                      node.scrollHeight > node.clientHeight + 1 &&
+                      ["auto", "scroll"].includes(
+                        getComputedStyle(node).overflowY,
+                      )
+                    )
+                      return;
+                  }
+                  if (event.deltaY < 0) nearBottom.current = false;
+                  else if (
+                    event.deltaY > 0 &&
+                    event.deltaMode === 0 &&
+                    event.deltaY >=
+                      area.scrollHeight - area.scrollTop - area.clientHeight
+                  )
+                    // Capture intent before deferred growth changes the bottom
+                    // between native wheel scrolling and its scroll event.
+                    nearBottom.current = true;
+                }}
                 onScroll={(event) => {
                   const el = event.currentTarget;
                   const atLatest =

@@ -138,12 +138,50 @@ it("follows deferred content growth without undoing upward reading", async () =>
   height = 3000;
   act(() => resizeContent([], {} as ResizeObserver));
   expect(area.scrollTop).toBe(900);
+  fireEvent.wheel(area, { deltaY: 2000, deltaMode: 0 });
+  // Native scrolling reaches the old bottom, but Markdown grows before the
+  // scroll event is delivered. Current geometry alone would miss the intent.
+  height = 3600;
   area.scrollTop = 2500;
   fireEvent.scroll(area);
-  height = 3600;
   act(() => resizeContent([], {} as ResizeObserver));
   expect(area.scrollTop).toBe(3100);
 });
+
+it.each(["zoom", "horizontal", "nested"])(
+  "does not resume following for a %s gesture",
+  async (kind) => {
+    mocked.messages.mockResolvedValue({
+      items: [sentTurn.user],
+      hasMore: false,
+    });
+    render(<App />);
+    const message = await screen.findByText("Hello");
+    const area = screen.getByLabelText("Conversation");
+    Object.defineProperties(area, {
+      scrollHeight: { value: 3000 },
+      clientHeight: { value: 500 },
+    });
+    act(() => resizeContent([], {} as ResizeObserver));
+    area.scrollTop = 1000;
+    fireEvent.scroll(area);
+    if (kind === "nested") {
+      message.style.overflowY = "auto";
+      Object.defineProperties(message, {
+        clientHeight: { value: 100 },
+        scrollHeight: { value: 400 },
+      });
+    }
+    fireEvent.wheel(message, {
+      deltaY: 10000,
+      deltaMode: 0,
+      ctrlKey: kind === "zoom",
+      shiftKey: kind === "horizontal",
+    });
+    act(() => resizeContent([], {} as ResizeObserver));
+    expect(area.scrollTop).toBe(1000);
+  },
+);
 
 it("keeps the visible message in place when an earlier page is prepended", async () => {
   const visible = {
