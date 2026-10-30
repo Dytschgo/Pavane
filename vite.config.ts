@@ -5,6 +5,18 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   envPrefix: ["VITE_"],
-  server: { host: "127.0.0.1", port: 1420, strictPort: true },
+  server: {
+    host: "127.0.0.1",
+    port: 1420,
+    strictPort: true,
+    watch: {
+      ignored: [
+        "**/target/**",
+        "**/src-tauri/**",
+        "**/evidence/**",
+        "**/lab-evidence/**",
+      ],
+    },
+  },
   test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
 });

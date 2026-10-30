@@ -25,6 +25,8 @@ pnpm desktop:build
 
 The standalone Windows executable is `target/release/pavane.exe`. This foundation has no installer, signing, updater, Pavane account, hosted service, or cloud sync. Provider services have their own accounts and data policies.
 
+For a separate local database, launch `pavane.exe --profile playground`. Normal launch retains your existing data. Profiles share the installed provider login; see [verification and profile boundaries](docs/TESTING.md).
+
 ## What works
 
 - SQLite conversations and drafts that survive reloads and restarts.

@@ -431,6 +431,8 @@ async fn run_model(
     }
 }
 
+mod profile;
+
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(
@@ -440,11 +442,13 @@ pub fn run() {
         )
         .setup(|app| {
             let data = app.path().app_local_data_dir()?;
-            std::fs::create_dir_all(&data)?;
-            let database = std::env::var_os("PAVANE_DATA_DIR")
-                .filter(|_| cfg!(debug_assertions))
-                .map(std::path::PathBuf::from)
-                .unwrap_or(data);
+            let database = profile::database_directory(
+                data,
+                std::env::args_os().skip(1).collect(),
+                std::env::var_os("PAVANE_DATA_DIR"),
+                cfg!(debug_assertions),
+            )
+            .map_err(std::io::Error::other)?;
             std::fs::create_dir_all(&database)?;
             let runtime = Arc::new(Runtime {
                 store: Mutex::new(

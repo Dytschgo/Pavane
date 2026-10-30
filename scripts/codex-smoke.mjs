@@ -4,12 +4,43 @@ import { mkdir, mkdtemp, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
+import { verificationContext } from "./verification-context.mjs";
+import { randomUUID } from "node:crypto";
 
 const root = resolve(import.meta.dirname, "..");
+const release = process.argv.includes("--release");
+const executable = join(
+  root,
+  release ? "target/release/pavane.exe" : "target/debug/pavane.exe",
+);
+const context = await verificationContext(
+  root,
+  executable,
+  release ? "release" : "debug",
+);
 const data = await mkdtemp(join(tmpdir(), "pavane-codex-"));
+const profile = release ? `verify-codex-${randomUUID()}` : null;
+const databaseDirectory = profile
+  ? join(process.env.LOCALAPPDATA, "cloud.pavane.desktop", "profiles", profile)
+  : data;
 const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 await mkdir(evidence, { recursive: true });
-const child = spawn(join(root, "target/debug/pavane.exe"), [], {
+await writeFile(
+  join(evidence, "codex-smoke.json"),
+  JSON.stringify(
+    {
+      context,
+      profile,
+      data,
+      databaseDirectory,
+      result: "running",
+      checks: [],
+    },
+    null,
+    2,
+  ),
+);
+const child = spawn(executable, profile ? ["--profile", profile] : [], {
   cwd: root,
   windowsHide: false,
   env: {
@@ -25,7 +56,7 @@ const errors = [];
 const checks = [];
 const canary = join(data, "host-canary");
 const unopened = spawn(
-  join(root, "target/debug/pavane.exe"),
+  executable,
   [
     "--pavane-codex-host",
     process.execPath,
@@ -47,7 +78,7 @@ checks.push(
   "provider host exits on parent EOF without starting its provider before the job gate",
 );
 const echoed = spawn(
-  join(root, "target/debug/pavane.exe"),
+  executable,
   [
     "--pavane-codex-host",
     process.execPath,
@@ -85,6 +116,7 @@ try {
   checks.push(
     "zero-click Codex subscription discovery and default model selection",
   );
+  await access(join(databaseDirectory, "pavane.sqlite3"));
   await page.getByRole("button", { name: /Change model/ }).click();
   await page.getByRole("combobox", { name: "Search models" }).waitFor();
   await page.screenshot({
@@ -234,9 +266,12 @@ try {
     join(evidence, "codex-smoke.json"),
     JSON.stringify(
       {
+        context,
         result: "passed",
         checks,
         data,
+        profile,
+        databaseDirectory,
         model: "codex:gpt-6.1-sol",
         reasoning: "high",
         inference:
@@ -246,8 +281,26 @@ try {
       2,
     ),
   );
-  console.log(JSON.stringify({ result: "passed", checks, data }, null, 2));
+  console.log(
+    JSON.stringify({ result: "passed", checks, data, profile }, null, 2),
+  );
 } catch (error) {
+  await writeFile(
+    join(evidence, "codex-smoke.json"),
+    JSON.stringify(
+      {
+        context,
+        profile,
+        data,
+        databaseDirectory,
+        result: "failed",
+        checks,
+        error: String(error),
+      },
+      null,
+      2,
+    ),
+  );
   if (browser)
     await browser
       .contexts()[0]
@@ -258,7 +311,7 @@ try {
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close().catch(() => {});
-  if (child.exitCode === null) {
+  if (child.exitCode === null && child.signalCode === null) {
     child.kill();
     await new Promise((resolve) => child.once("exit", resolve));
   }

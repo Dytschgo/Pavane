@@ -2,7 +2,7 @@
 
 Use a fresh checkout, Node.js 24+, pnpm 10.34.5, stable MSVC Rust, C++ build tools and WebView2.
 
-Dylan requires subsequent Pavane builds/tests to run on the lab Windows PC through LabManager. Source editing and formatting can remain on the coding PC. Use [the scoped lab plan](LAB-VERIFICATION.md) and `scripts/verify-windows.ps1`; do not run the commands below on the coding PC or bypass manager policy/reservations. GitHub's Windows CI is a separate source/build gate, not native lab visual acceptance.
+On 30 October 2026 Dylan explicitly permitted Pavane testing on this computer while he sleeps. This supersedes the earlier lab-only restriction for Pavane. Keep app data isolated and use the lab for specifically coordinated LabManager verification requests. This does not authorize local LabManager builds/tests or bypass its unresolved job fence. The [scoped lab plan](LAB-VERIFICATION.md) and exact `& .\scripts\verify-windows.ps1` remain available for supported future guest execution. GitHub Windows CI is a separate source/build gate.
 
 ```powershell
 pnpm install --frozen-lockfile
@@ -34,13 +34,28 @@ cargo build -p pavane --locked
 node scripts/native-smoke.mjs
 ```
 
-The fixture needs unused ports 11434 and 9422. Evidence is written under ignored `evidence/`; its JSON reports the synthetic data directory. Debug builds alone accept `PAVANE_DATA_DIR` for isolation. The production binary ignores that environment override. The test opens the desktop app, discovers models, sends and streams UTF-8 text, compares two responses, stops streams, reloads persistent chat/drafts, keeps a temporary chat, creates a bot and checks instructions in the actual HTTP request, and visits all workflows. It then closes its own process and server.
+The fixture needs unused ports 11434 and 9422. Evidence is written under ignored `evidence/` (or `PAVANE_EVIDENCE_DIR`); JSON reports the synthetic directory, source/lockfile manifest, executable hash and toolchain. Debug builds alone accept `PAVANE_DATA_DIR`; release ignores it. The test opens the app, checks oversized Unicode feedback without truncation, streams UTF-8 text, compares/stops responses, reloads persistent chat/drafts, keeps a temporary chat, creates a bot and checks instructions in the actual HTTP request, and visits all workflows. It closes only its own app and server. Reports start as running and become passed/failed; an old pass must not substitute for the current exit status.
 
 Check native screenshots for wide and narrow windows, long titles, readable status/error text, focus and modal recovery. Exercise keyboard search, menu dismissal and model selection. Do not run an unrelated full browser suite during development. Native fixture results establish the app/IPC/storage/transport contract; they do not prove real provider authentication or inference.
 
 The fixture also captures a focused composer and a long multiline draft. It checks that text does not overlap the toolbar, the send action remains visible, and opening the model picker preserves an unsent draft. Inspect `native-composer-focused.png` and `native-composer-multiline.png` against the reference; geometry checks alone do not establish visual quality.
 
 `node scripts/codex-smoke.mjs` uses a separate temporary database/WebView profile and CDP port 9423. With the guest's existing Codex ChatGPT login it exercises automatic discovery, model/effort/tier controls, favourites across reload, one real Markdown reply, an interrupted second reply and forced app-exit job cleanup. This is live subscription usage; it is separate from the synthetic fixture. `scripts/verify-windows.ps1 -LiveCodex` includes it explicitly. It does not set up a login, transfer credentials or enable provider tools.
+
+`node scripts/codex-smoke.mjs --release` exercises the same live flow in the freshly built optimized executable, using an explicit unique database profile and separate WebView directory. Its report records the actual profile/database directory. It needs no Vite server; never substitute a stale production executable for the documented fresh build.
+
+## Bundled release and profiles
+
+Build the current source before release verification. The release fixture uses `--profile verify-<UUID>` to select a separate SQLite/Codex workspace under `%LOCALAPPDATA%/cloud.pavane.desktop/profiles/NAME`; it supplies a separate temporary WebView2 directory. It never uses the normal database. Keep port 9424 unused and run fixtures serially. Stop the Vite process you started before this check to prove the bundle is independent:
+
+```powershell
+pnpm desktop:build
+node scripts/release-smoke.mjs
+```
+
+This checks the actual `tauri.localhost` bundled renderer, all routes and durable draft reload, then records three warm-machine launches and owned process-tree memory samples five seconds after discovery settles. It performs no inference. `release-smoke.json` includes every generated profile/WebView directory even on failure, plus the executable/source provenance. Inspect `release-empty.png` and `release-draft.png`. Profiles intentionally retain synthetic data for diagnosis; delete only identified fixture directories during an authorized cleanup.
+
+The optional `--profile NAME` database selection works in both builds. Names use 1–64 ASCII letters, numbers, hyphens or underscores. Invalid arguments or unwritable directories fail startup without falling back to normal data. Windows names are case-insensitive. This is database selection, not a filesystem sandbox or separate provider account: existing Codex credentials and configuration remain CLI-owned/shared. Ordinary WebView preferences remain shared unless a separate `WEBVIEW2_USER_DATA_FOLDER` is supplied. Normal launch keeps the existing database; debug-only environment behavior is unchanged.
 
 ## Data and measurements
 

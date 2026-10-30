@@ -32,11 +32,12 @@ try {
     $vite = Join-Path $repository 'node_modules/vite/bin/vite.js'
     $devServer = Start-Process -FilePath (Get-Command node).Source -ArgumentList ('"{0}" --host 127.0.0.1 --port 1420 --strictPort' -f $vite) -WorkingDirectory $repository -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $evidence 'vite.stdout.log') -RedirectStandardError (Join-Path $evidence 'vite.stderr.log')
     Invoke-Check 'native mock-provider workflows' { node scripts/native-smoke.mjs }
+    Invoke-Check 'optimized standalone build' { pnpm desktop:build }
     if ($LiveCodex) {
         # Uses only the guest's existing Codex login. Never transfer a host auth file.
-        Invoke-Check 'real Codex model picker, streaming, interrupt and job containment' { node scripts/codex-smoke.mjs }
+        Invoke-Check 'optimized Codex model picker, streaming, interrupt and job containment' { node scripts/codex-smoke.mjs --release }
     }
-    Invoke-Check 'optimized standalone build' { pnpm desktop:build }
+    Invoke-Check 'bundled release workflows and owned process-tree measurements' { node scripts/release-smoke.mjs }
     $binary = Get-Item -LiteralPath (Join-Path $repository 'target/release/pavane.exe')
     $report = [ordered]@{
         result = 'passed'
@@ -56,7 +57,7 @@ try {
 } finally {
     if ($devServer -and -not $devServer.HasExited) { Stop-Process -Id $devServer.Id -ErrorAction SilentlyContinue }
     $env:PAVANE_EVIDENCE_DIR = $previousEvidenceOverride
-    $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png')
+    $artifacts = @('verification.json', 'native-smoke.json', 'native-empty.png', 'native-chat.png', 'native-final.png', 'native-narrow.png', 'native-composer-focused.png', 'native-composer-multiline.png', 'native-unicode-limit.png', 'native-failure.png', 'codex-smoke.json', 'codex-picker.png', 'codex-picker-options.png', 'codex-chat.png', 'codex-connections.png', 'codex-failure.png', 'release-smoke.json', 'release-empty.png', 'release-draft.png')
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()
     $collected.Add('verification.json')

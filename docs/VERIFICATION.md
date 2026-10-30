@@ -66,3 +66,36 @@ An independent read-only source review identified four adjacent defects: streami
 At this checkpoint only source formatting and `git diff --check` ran on the coding PC. Renderer tests, lint/types and the build for this pass await Windows CI. Native visual/interaction and final live Codex checks remain blocked by supported reconciliation. No current screenshot, RAM measurement or executable acceptance is claimed. The changes form one coherent chat workflow pass, with most additions devoted to behavioral regressions. Reverting the commit restores prior interaction behavior without a SQLite migration.
 
 Windows CI on `081700d` passed formatting and lint, then stopped in TypeScript: two new role queries used an unsupported `exact` option. String accessible-name queries already match exactly. The follow-up removes that option without weakening the assertions or changing app behavior. Renderer execution and the build were not reached; the corrected candidate needs its own CI result.
+
+## Overnight native hill climb — 30 October 2026
+
+Dylan explicitly permitted local Pavane tests/builds while he sleeps, superseding the earlier lab-only restriction for this app. The baseline `f0885a6` passed all Windows CI checks in run `40972253734`, job `123791592323`: 24 renderer tests, 13 native tests, nine core tests and optimized build. One live native test was ignored by default. The results below apply to the subsequent WIP source, correlated through each report's source manifest and binary hash; they do not clear the LabManager incident.
+
+### Fixes and checks
+
+- `pnpm check` passed format, lint, TypeScript and all 31 renderer tests. A deterministic post-response test first reproduced blocked sending during quota discovery, then passed with background refresh kept separate from initial discovery. Two further picker cases distinguish pending discovery from a genuinely unavailable saved selection; accessible labels match the visible state.
+- The slow-save draft workload (16 KiB initial text, 200 edits held behind one unresolved save) first made 201 `saveDraft` calls, then two after coalescing. This is a controlled renderer regression, not a measured end-to-end typing or SQLite speedup. The latest snapshot, failure cache, exact-version acknowledgement and queue-finalizer/multi-chat cases pass. Oversized Unicode text is kept intact in this window with explicit feedback; shortening resumes persistence.
+- Rust formatting, clippy and all 24 Rust tests passed (15 native/profile tests and nine core tests; one live unit test ignored). Profile tests cover default behavior, release ignoring the debug override, explicit selection and malformed/path/oversize arguments failing without fallback.
+- `node scripts/native-smoke.mjs` passed all 12 actual native workflows after the changes. Focused/multiline composer, wide/narrow chat and Unicode-limit captures were inspected.
+- `node scripts/codex-smoke.mjs` and the final `--release` variant passed all eight checks with existing Codex CLI 0.165.0 login: actual model/effort/tier discovery, favourites/reload, real GPT-6.1-Sol Markdown, reload persistence, interrupted partial output and hard-exit provider job cleanup. The fixture initially completed its checks but exited unsuccessfully by waiting twice for a signal-terminated child; checking both exit/signal status fixed the teardown. Both complete commands then exited 0. The optimized variant used a fresh named database profile. No auth files were copied or global Codex settings changed.
+- Independent read-only performance, draft-persistence and profile-isolation reviews informed these fixes. The two implementation reviews found no material correctness issue. The profile reviewer’s low finding (unrecorded fixture directories) was corrected before the release check. No schema changed.
+
+### Exact standalone and measurements
+
+`pnpm desktop:build` produced `target/release/pavane.exe`, **8,567,296 bytes**, SHA-256 **`878d2cbe881981fd6f7a9c2f97843aefc3fe827e43a746dfccc25ef0d052ce07`**. The first build attempt could not replace the old running foundation executable. Its known idle instance was inspected and closed gracefully, preserving saved data; the current build then succeeded. The updated executable contains Codex and the refined chat.
+
+With Vite stopped, `node scripts/release-smoke.mjs` passed bundled `tauri.localhost` routing, all six destinations and SQLite draft reload using explicit fresh database profiles and temporary WebView directories. Its first attempt exposed delayed WebView debugging-port release between launches. The fixture now waits for the actual owned listener to disappear, without stopping any process by port; all three serial launches then passed.
+
+| Warm-machine sample | Composer ready | Discovery settled | Process-tree private memory | Aggregate working set |
+| ------------------- | -------------: | ----------------: | --------------------------: | --------------------: |
+| 1                   |         474 ms |           2847 ms |                   235.5 MiB |             533.9 MiB |
+| 2                   |         593 ms |           2962 ms |                   243.8 MiB |             533.4 MiB |
+| 3                   |         543 ms |           2900 ms |                   232.7 MiB |             531.7 MiB |
+
+Samples include ten owned processes: app, WebView2 and Codex infrastructure. Each uses a fresh SQLite/WebView profile on a warm Windows machine; memory is sampled five seconds after discovery, with CDP enabled and no inference. Startup includes automation attachment. Working-set totals can count shared pages more than once. This is an idle baseline, not cold-start, peak-load, a historical comparison or proof of the low-RAM goal. Long streaming Markdown and large histories still need profiling before further rendering/process-lifetime changes.
+
+Ignored local reports/captures: `native-smoke.json`, `codex-smoke.json`, `release-smoke.json`, composer/chat/picker/Unicode screenshots, `release-empty.png` and `release-draft.png`. Reports include source/lockfile/executable hashes, toolchain and generated fixture ownership. Source manifests describe source at run time; they are not inferred build receipts. The verifier exports the same allowlisted synthetic evidence on failure/finally. The updated Vite watcher excludes Rust outputs and fixture evidence after observed locked-file watcher errors during builds.
+
+No installer, signing, published release, merge, license choice, API-key provisioning or new lab job. LabManager's original unknown job/token/guard and genuine-human-attestation gate remain untouched. The reviewed 2.4.3 maintenance request needs its own approval; local Pavane success is not lab readiness.
+
+The combined lab verifier's new release stage and PowerShell syntax were checked in source; the individual app commands above ran locally. Combined execution/export inside the guest remains pending. Changes are split into a chat/draft commit and a native-profile/verification commit; the latter keeps startup isolation, its negative tests and the release evidence path together.

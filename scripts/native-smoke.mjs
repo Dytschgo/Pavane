@@ -5,13 +5,20 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { chromium } from "playwright-core";
+import { verificationContext } from "./verification-context.mjs";
 
 // Drives the actual debug Windows WebView, never a browser storage imitation.
 // Run only with no Ollama service on 11434; a bind error leaves it untouched.
 const root = resolve(import.meta.dirname, "..");
+const executable = join(root, "target", "debug", "pavane.exe");
+const context = await verificationContext(root, executable, "debug");
 const data = await mkdtemp(join(tmpdir(), "pavane-smoke-"));
 const evidence = process.env.PAVANE_EVIDENCE_DIR ?? join(root, "evidence");
 await mkdir(evidence, { recursive: true });
+await writeFile(
+  join(evidence, "native-smoke.json"),
+  JSON.stringify({ context, result: "running", checks: [] }, null, 2),
+);
 const requests = [];
 const mock = createServer(async (request, response) => {
   if (request.url === "/api/tags") {
@@ -60,7 +67,6 @@ await new Promise((resolve, reject) => {
 let child;
 let browser;
 const diagnostics = [];
-const executable = join(root, "target", "debug", "pavane.exe");
 async function launch() {
   child = spawn(executable, [], {
     cwd: root,
@@ -96,7 +102,7 @@ async function close() {
     await browser.close();
     browser = undefined;
   }
-  if (child && child.exitCode === null) {
+  if (child && child.exitCode === null && child.signalCode === null) {
     child.kill();
     await new Promise((resolve) => child.once("exit", resolve));
   }
@@ -112,9 +118,32 @@ try {
   await page.getByRole("option", { name: /smoke-a/ }).click();
   await page.getByRole("button", { name: "Delete Soon", exact: false }).click();
   await page.getByText("30 days left").waitFor();
+  const oversized = "界".repeat(30000);
+  const editor = page.getByRole("textbox", { name: "Message", exact: true });
+  await editor.fill(oversized);
+  await page.getByText(/Shorten it to save and send/).waitFor();
+  assert.equal(await editor.inputValue(), oversized);
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await editor.press("Enter");
+  assert.equal(requests.length, 0);
+  await page.screenshot({
+    animations: "disabled",
+    path: join(evidence, "native-unicode-limit.png"),
+  });
+  checks.push(
+    "oversized Unicode draft remains intact with byte-limit feedback and cannot be sent",
+  );
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("Hello from the native smoke test");
+  await page
+    .getByText(/Shorten it to save and send/)
+    .waitFor({ state: "hidden" });
   await page.screenshot({
     animations: "disabled",
     path: join(evidence, "native-composer-focused.png"),
@@ -362,6 +391,7 @@ try {
     join(evidence, "native-smoke.json"),
     JSON.stringify(
       {
+        context,
         executable,
         data,
         checks,
@@ -378,6 +408,14 @@ try {
     JSON.stringify({ result: "passed", checks, evidence, data }, null, 2),
   );
 } catch (error) {
+  await writeFile(
+    join(evidence, "native-smoke.json"),
+    JSON.stringify(
+      { context, result: "failed", checks, error: String(error) },
+      null,
+      2,
+    ),
+  );
   if (browser)
     await browser
       .contexts()[0]

@@ -2,6 +2,8 @@
 
 User instruction, 29 October 2026: test on the lab Windows PC through LabManager, not on the coding PC. Local test processes and the dev server were stopped. Source editing, review and job preparation remain local.
 
+Update, 30 October: Dylan subsequently explicitly permitted local Pavane testing while asleep. That supersedes the opening restriction for Pavane only. Specifically coordinated LabManager verification still belongs on the lab under its actual approval/cleanup gates; no local LabManager builds/tests or fence bypass is authorized. Local native results are in [VERIFICATION.md](VERIFICATION.md).
+
 Use LabManager's installed stdio MCP adapter with the stable session `pavane-codex-002`. The coding session does not expose LabManager tools directly; the installed `lab-manager.exe mcp --session pavane-codex-002` adapter connects to the same native manager. Do not use a direct runner or SSH to bypass manager policy or reservation state.
 
 ## Concrete job scope
@@ -59,3 +61,11 @@ Use the exact installed adapter and stable session above, with normal initialize
 ```
 
 Successful status calls or physical readiness do not authorize dispatch while cleanup is unconfirmed. Do not reserve/submit/retry/release/cancel under the current fence. Once a supported native recovery gate is actually satisfied, identify and preflight the new source candidate explicitly; never silently replay the old request or weaken the saved guard. Keep the exact core verifier invocation above. Inspect correlated run artifacts and allowlisted reports/captures, and claim native acceptance only from that candidate's actual evidence.
+
+## Installed recovery, pending human action
+
+Installed 2.4.2 (`20261030-011914`) adapter SHA-256 `CA9C69B4435CD125E4C98A8E8776FC196A592DB2056FFDAC4766155E71A65C43` was independently checked through real initialize/status/preflight at 2026-10-30T00:25:13Z. Policy/source/timeout/readiness/desktop passed; occupancy remained cleanup-required. A further preflight at 00:32:05Z remained blocked. The original private client’s adapter identity was updated without changing its token or durable submission guard. No new Pavane submission or release occurred.
+
+The installed native Recovery dialog now supports genuine human cleanup attestation. Maintenance fixture success does not perform it. After the operator independently establishes cleanup and records the receipt, only the original owner may perform supported release/reprobe. Hyper-V preparation has refused the normal manager process’s missing read rights; any operator elevation is separate from agent automation. Preserve the physical-stop boundary for LabManager UI.
+
+LabManager 2.4.3 policy-proposal source/review is settled but unbuilt/uninstalled. Its next exact `Tests/Verify-PolicyProposals.ps1` desktop maintenance run (300 seconds, queue timeout 30) requires a new specific Dylan approval. This is not a Pavane test, cleanup acknowledgement or permission to run LabManager builds on this computer. The one previous maintenance approval was consumed by 2.4.2.
