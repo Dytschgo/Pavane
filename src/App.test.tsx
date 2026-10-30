@@ -148,6 +148,105 @@ it("follows deferred content growth without undoing upward reading", async () =>
   expect(area.scrollTop).toBe(3100);
 });
 
+it("waits for rendered growth before measuring a streamed content update", async () => {
+  connectSol();
+  let receive: (event: RunEvent) => void = () => {
+    throw new Error("Run callback was not registered");
+  };
+  mocked.send.mockImplementation(
+    (
+      _id: string,
+      _text: string,
+      _models: string[],
+      onEvent: (event: RunEvent) => void,
+    ) => {
+      receive = onEvent;
+      return Promise.resolve(sentTurn);
+    },
+  );
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const input = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  fireEvent.change(input, { target: { value: "Hello" } });
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await screen.findByRole("button", { name: "Stop responses" });
+  const area = screen.getByLabelText("Conversation");
+  let height = 1500;
+  let top = 0;
+  const measureHeight = vi.fn(() => height);
+  Object.defineProperties(area, {
+    scrollHeight: { get: measureHeight },
+    clientHeight: { value: 500 },
+    scrollTop: {
+      get: () => top,
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, height - 500));
+      },
+    },
+  });
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(area.scrollTop).toBe(1000);
+  measureHeight.mockClear();
+  await act(async () =>
+    receive({
+      runId: "sent-run",
+      chatId: first.id,
+      messageId: "sent-reply",
+      kind: "delta",
+      delta: "A streamed reply",
+      status: "running",
+      error: null,
+    }),
+  );
+  await screen.findByText("A streamed reply");
+  // Receiving content alone must not force geometry before the browser's
+  // observed-size notification, including a commit with unchanged height.
+  expect(measureHeight).not.toHaveBeenCalled();
+  expect(area.scrollTop).toBe(1000);
+  height = 2200;
+  act(() => resizeContent([], {} as ResizeObserver));
+  expect(measureHeight).toHaveBeenCalled();
+  expect(area.scrollTop).toBe(1700);
+});
+
+it("follows a new send from an unpinned conversation before any reply delta", async () => {
+  connectSol();
+  mocked.messages.mockResolvedValue({ items: [sentTurn.user], hasMore: false });
+  mocked.send.mockResolvedValue({
+    ...sentTurn,
+    user: { ...sentTurn.user, id: "next-user", content: "Next", sequence: 2 },
+  });
+  render(<App />);
+  await screen.findByText("Hello");
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const input = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(input).toBeEnabled());
+  const area = screen.getByLabelText("Conversation");
+  let height = 1500;
+  let top = 0;
+  Object.defineProperties(area, {
+    scrollHeight: { get: () => height },
+    clientHeight: { value: 500 },
+    scrollTop: {
+      get: () => top,
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, height - 500));
+      },
+    },
+  });
+  act(() => resizeContent([], {} as ResizeObserver));
+  area.scrollTop = 400;
+  fireEvent.scroll(area);
+  fireEvent.change(input, { target: { value: "Next" } });
+  height = 2200; // Geometry after the submitted turn is inserted.
+  fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+  await screen.findByRole("button", { name: "Stop responses" });
+  // No response callback or size notification has been supplied: the changed
+  // message count must still perform the observer setup's initial follow.
+  expect(area.scrollTop).toBe(1700);
+});
+
 it.each(["zoom", "horizontal", "nested"])(
   "does not resume following for a %s gesture",
   async (kind) => {
