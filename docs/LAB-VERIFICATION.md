@@ -1,5 +1,11 @@
 # Pavane Windows lab run
 
+## Current memoization checkpoint — 30 October, 23:15 UTC
+
+CI41141772561 passed requested1804287; actualbuild09d1d3acd9f1a144d5d9011b14c9f549f1dbb0f9. Two hash-bound native runs `20261030T230735Z-625d8f047280` and `20261030T231149Z-321d421c6c3b` passed native12/release2/full interaction-retention and complete CPU capture. ScriptDuration10.69–11.24s versus baseline14.76–14.80s, but layout and typing p95 rose, total-task ranges overlap. No broad CPU/latency/RAM win. Five reports/12PNGs+source metadata retained per run; all12 first-run and long/read/history repeat captures inspected. [Exact proof](VERIFICATION.md#memoization-comparison-accepted--30-october-2026), [comparison/tradeoffs](CPU-PROFILING.md). Latest unsigned tested executable copied without launch to ignored `evidence/ci-build-1804287/`.
+
+Both root disposals completed:5b8d33ec3b4b4d869eb75e947a24425f at23:11:11Z Boot16→17, a35d995d1adb49f698e02391e7d24368 at23:15:13Z Boot17→18; each restart1/cleanup1/task-observer-workspace proof. Historical unknown/exit0/exited-zero preserved separately from cleanuptrue/aborted-by-reset/reservationsretired. Fresh23:15:28Z ready+desktop/available/noreservation; refresh before future ownership. No active job/recovery/maintenance. Installed2.4.8/policy/verifier/desktop1800/noLiveCodex/noinstall unchanged. Local app/tests/builds/UI prohibited; source inputs moved privately, old guards/tokens never replayed/released. This successor changes documentation only; no redundant native rerun.
+
 ## Current CPU baseline checkpoint — 30 October, 22:54 UTC
 
 CI41138692946 passed0bc99e4; two hash-bound native runs `20261030T223935Z-e868435372c4` and `20261030T224900Z-1ca5a6f88efd` passed native12/release2/full interaction-retention and complete CPU capture. Same workload/runtime/binary, ScriptDuration14.761470/14.799151s, Markdown exclusive shares48.71/48.79%. Five reports/12PNGs retained per run; long/read/history inspected. [Full provenance](VERIFICATION.md#cpu-baselines-and-memoization-experiment--30-october-2026), [comparison contract](CPU-PROFILING.md). These are baselines, not a CPU/RAM improvement.

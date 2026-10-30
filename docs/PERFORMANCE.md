@@ -2,7 +2,7 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
-Two `PV-PERF-003` native CPU baselines passed at0bc99e4: ScriptDuration14.761470/14.799151s, Markdown exclusive sample shares48.71/48.79%, with full interaction/retention acceptance. Active `PV-PERF-004` memoizes the expensive child receiving deferred text; CI and equivalent candidate profiles are pending. No measured CPU/RAM improvement yet. [Baseline, experiment and interpretation](CPU-PROFILING.md).
+`PV-PERF-004` passed CI1804287 and two matched native comparisons: less JavaScript work, higher layout work and typing p95, overlapping total-task ranges. Both full interaction/retention fixtures passed; no broad CPU/latency/RAM improvement is established. The memo boundary is retained for its narrow JavaScript saving. `PV-PERF-005` tracks remaining layout work; source inspection suggests checking redundant provider-event versus rendered-size following, not changing stream cadence or Markdown semantics without evidence. [Baseline, measurements and tradeoffs](CPU-PROFILING.md).
 
 ## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
 
