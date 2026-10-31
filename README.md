@@ -27,7 +27,7 @@ The standalone Windows executable is `target/release/pavane.exe`. This foundatio
 
 For a separate local database, launch `pavane.exe --profile playground`. Normal launch retains your existing data. Profiles share CLI-owned logins; the new Gemini API path scopes its key separately to each profile; see [verification and profile boundaries](docs/TESTING.md).
 
-The current PR includes a [Gemini API connection](docs/GEMINI-API.md) with Windows-protected keys and text streaming. Baselinef93104b passed CI mock/vault checks and full native verification of the empty-key connection UI; live key/inference remains unverified. This is an API-key route with separate usage/billing.
+The current PR includes a [Gemini API connection](docs/GEMINI-API.md) with Windows-protected keys and text streaming. Baseline942e87a passed CI mock/vault checks and16 native workflows, including empty-key connection controls and composition-safe Escape; live key/inference remains unverified. This is an API-key route with separate usage/billing.
 
 ## What works
 

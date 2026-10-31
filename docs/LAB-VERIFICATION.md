@@ -1,6 +1,12 @@
 # Pavane Windows lab run
 
-## Current accepted baseline — 31 October, 03:10 UTC
+## Current accepted baseline — 31 October, 03:44 UTC
+
+CI 41164679385 passed 942e87a; source-bound lab 20261031T033906Z-39613f420854 passed 16 native/release 2/full history/retention/profile. New composition-flagged Escape check keeps ongoing native text/draft, then normal keyboard Escape stops; actual OS IME UI remains untested. Five reports/15 PNGs/two metadata retained, all 15 captures inspected. Exact unsigned tested exe/manifest saved without launch in ignored evidence/ci-build-942e87a/. [Full identities/results](VERIFICATION.md#composer-ime-cancellation-accepted--31-october-2026).
+
+Root recovery 374cd254fdf34ee1b540d2b5409708f9 completed03:44:20.8201415Z Boot24→25/restart 1cleanup 1/task/observer/workspace proof. Historical unknown/exit0/exited-zero preserved, cleanup confirmed/aborted-by-reset/reservation retired. Fresh03:47:05Z status available/no reservation/cleanup fence cleared; a future turn needs a fresh probe/preflight. Inputs privately moved, guard/token preserved, no active root job/recovery. Prior typing 128.2835 ms remains open despite latest 81.5281 ms; no causal performance claim. No live Google/guest Codex/paid request or local app/tests/build/UI. Next checkpoint is docs/public Claude contract only, no duplicate native run.
+
+## Previous accepted baseline — 31 October, 03:10 UTC
 
 CI41162239161 passedf93104b; exact source-bound lab20261031T030540Z-2a37f514c3eb passed15native/release2/full interaction/history and a complete20352.292ms/10364sample capture with2backward steps. All5reports/15PNGs/two source metadata retained and15captures inspected. Latest unsigned tested executable/manifest saved without launch to ignored evidence/ci-build-f93104b/. Earlier typing128.2835ms failure remains open despite this run's94.7395ms pass; no optimization claim. No live Google/key inference or guest Codex login acceptance. [Exact proof](VERIFICATION.md#signed-cpu-timestamps-accepted--31-october-2026).
 

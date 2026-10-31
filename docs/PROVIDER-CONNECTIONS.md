@@ -45,3 +45,7 @@ Use the [Gemini API slice](GEMINI-API.md), not the retired consumer CLI plan. Pr
 The original audit checkpoint changed documentation only; later API source work is recorded separately in GEMINI-API.md. Validate formatting, local links/anchors, source identities and the final diff. No app tests/builds, CLI probes, login, provider requests, guest dispatch, installation or local UI occurred. Private copies and a SHA256 manifest of the eight inspected public files remain under `%LOCALAPPDATA%/LabManager/pavane-provider-audit-20261031`; they contain public source only. No raw auth or provider runtime data is retained.
 
 Rollback removes this audit/decision and restores the previous task/plan pointers. Existing app behavior, SQLite, provider configuration, accepted executable, lab receipts and immutable submission guards are unchanged. Research complete does not mean adapters complete: PV-PROVIDER-002 stays working until a supported connection is implemented and verified.
+
+## Claude follow-up — 31 October
+
+The next bounded implementation is the [Claude Console-key/workspace contract](CLAUDE-CONNECTION-PLAN.md). It records the current versioned API and keeps the documented unmodified Claude Code subscription exception as a separate qualification candidate. The earlier audit is historical; it must not be read as a blanket subscription prohibition. Public-only research, no runtime or live account acceptance.
