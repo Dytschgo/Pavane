@@ -37,6 +37,7 @@ For a separate local database, launch `pavane.exe --profile playground`. Normal 
 - Markdown replies, lists, tables and code blocks with copy actions; safe web links open in your default browser.
 - Up to four parallel model responses per prompt, with a bounded native queue.
 - Projects, spaces, and bots with reusable instructions and grouped conversations.
+- Edit their saved names and instructions from the pencil beside the workspace name. Conflicting edits are rejected; failed saves keep your text.
 - Six workflow routes, keyboard navigation, model search, and connection settings.
 
 Additional provider adapters, autonomous agent swarms, attachments, and image/video generation are tracked in [TASKS.md](TASKS.md). Their interface scaffolds are labeled **Planned**. Parallel model comparison does not delegate tools or create autonomous agents.

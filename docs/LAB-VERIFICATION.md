@@ -1,5 +1,11 @@
 # Pavane Windows lab run
 
+## Saved workspace editor accepted — 31 October, 00:22 UTC
+
+CI41149006358 passed3eb83fb; actualbuild1e6f360c991b86d7baa04c02ef1cacf2e5c744c2. Hash-bound native run20261031T001900Z-0a4bb669056b passed14native/release2/full interaction-retention/profiling. New flow verified cancel/focus, UTF8 overflow, actual second-writer conflict, retained draft/explicit reload, preserved linked IDs/kind, saved UI values after reload and new instructions in the next two synthetic provider requests. Five reports/14PNGs/source metadata retained, every capture inspected. Latest unsigned test executable copied without launch to ignored evidence/ci-build-3eb83fb/. [Full provenance](VERIFICATION.md#saved-workspace-editor-accepted--31-october-2026).
+
+Root disposal3caf3c3ce4734948bf8a8ea2c2dd380b completed00:22:33.3444603Z Boot20→21/restart1cleanup1/task-observer-workspace proof; historical unknown/exit0 preserved with separate cleanuptrue/aborted-by-reset/reservationretired. Fresh00:22:50Z ready+desktop/available/noreservation, no active job/recovery/maintenance. Installed2.4.8/policy/exactverifier/desktop1800/noLiveCodex/noinstall unchanged. Local app/tests/build/UI remain prohibited. Source inputs moved privately; old guards/token never replayed/released. Docs-only successor needs no duplicate native run. Refresh readiness before a future changed candidate.
+
 ## Rejected experiment settled — 30 October, 23:44 UTC
 
 CI41144684424 passedf2c8f72; first native233642Z-01723ec1cff6 passed, repeat234029Z-7526d4861912 failed typingp95128.0864ms against unchanged120ms budget. Native12/release2/scroll/history/exact retention/complete profiling passed in both; layout overlaps baseline. No optimization acceptance or retry-to-green. App source restored to1804287; rollback CI pending, accepted user-test binary unchanged. Five reports/12 and13PNGs/source metadata retained; all12 first-run and repeat long/read/history/failure inspected. [Exact negative result](VERIFICATION.md#rendered-size-experiment-rejected--30-october-2026).
