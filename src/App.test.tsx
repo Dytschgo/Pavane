@@ -93,13 +93,11 @@ function connectSol() {
 
 async function openNavigation() {
   fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-  await screen.findByRole("dialog", { name: "Chats", exact: true });
+  await screen.findByRole("dialog", { name: "Chats" });
 }
 async function openConnections() {
   await openNavigation();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Connections", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
   await screen.findByRole("dialog", { name: "Your connections" });
 }
 
@@ -1297,7 +1295,7 @@ it("opens a keyboard-contained navigation drawer and returns focus without clear
   expect(document.querySelector(".composer-footer")).toBeNull();
   const trigger = screen.getByRole("button", { name: "Open navigation" });
   await user.click(trigger);
-  const drawer = screen.getByRole("dialog", { name: "Chats", exact: true });
+  const drawer = screen.getByRole("dialog", { name: "Chats" });
   await user.tab();
   expect(drawer).toContainElement(document.activeElement as HTMLElement);
   await user.keyboard("{Escape}");

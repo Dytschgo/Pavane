@@ -1,6 +1,6 @@
 # Current plan
 
-PV-UX-CANVAS-001 working under Sol: implement Dylan's selected R3-B / Open Canvas — Deep Charcoal and demonstrate the actual app. Closed-by-default modal navigation, unified history, expiry/Keep in header, quiet centered empty state, left model/right send and neutral near-black cards. [Scope/reference/rollback](../OPEN-CANVAS.md). Source authored; three renderer regressions and changed native desktop/480px navigation/canvas captures await CI then a fresh authenticated lab turn. No host app/tests/build/UI/provider/vault execution. Continue draft PR #1; no merge or release.
+PV-UX-CANVAS-001 working under Sol: implement Dylan's selected R3-B / Open Canvas — Deep Charcoal and demonstrate the actual app. Closed-by-default modal navigation, unified history, expiry/Keep in header, quiet centered empty state, left model/right send and neutral near-black cards. [Scope/reference/rollback](../OPEN-CANVAS.md). First CI fbb65e0 passed format/lint then failed types on three unsupported Testing Library exact options; query-only correction preserves exact string names. New CI/native pending. Source authored; three renderer regressions and changed native desktop/480px navigation/canvas captures await CI then a fresh authenticated lab turn. No host app/tests/build/UI/provider/vault execution. Continue draft PR #1; no merge or release.
 
 ## Prior accepted baseline
 
