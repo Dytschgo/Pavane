@@ -127,11 +127,13 @@ export const ChatMessage = memo(function ChatMessage({
       </div>
       {["failed", "cancelled", "interrupted"].includes(message.status) && (
         <div className="message-outcome">
-          {message.status === "interrupted"
-            ? "Interrupted when Pavane closed. Partial text was saved."
-            : message.status === "cancelled"
-              ? "Stopped. Partial text was saved."
-              : "Couldn’t finish this response. Your message is saved."}
+          <span>
+            {message.status === "interrupted"
+              ? "Interrupted when Pavane closed. Partial text was saved."
+              : message.status === "cancelled"
+                ? "Stopped. Partial text was saved."
+                : "Couldn’t finish this response. Your message is saved."}
+          </span>
           {onRetry && (
             <Button
               size="small"

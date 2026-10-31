@@ -171,3 +171,33 @@ it.each([
     expect(await screen.findByText(reply.content)).toBeInTheDocument();
   },
 );
+
+it.each([
+  ["cancelled", "Stopped. Partial text was saved."],
+  ["interrupted", "Interrupted when Pavane closed. Partial text was saved."],
+  ["failed", "Couldn’t finish this response. Your message is saved."],
+] as const)(
+  "keeps the %s outcome independently identifiable beside Retry",
+  async (status, text) => {
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TooltipProvider>
+        <ChatMessage
+          message={{ ...reply, status }}
+          models={[]}
+          onError={vi.fn()}
+          onRetry={onRetry}
+        />
+      </TooltipProvider>,
+    );
+    const outcome = screen.getByText(text, { exact: true });
+    expect(outcome.textContent).toBe(text);
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(outcome).not.toContainElement(retry);
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(onRetry).toHaveBeenCalledWith({ ...reply, status }),
+    );
+    expect(outcome.textContent).toBe(text);
+  },
+);

@@ -1,5 +1,7 @@
 # Current plan
 
+29fd01d CI passed93renderer/79native+15storage/all gates. Native lab20261031T153142Z-f002681ae8b0 failed the unchanged exact Stop text check because the Retry child changed its parent text. Six prior checks passed; recovery/layout/release/performance not reached. Isolate status text in a span and add three status-plus-Retry renderer cases; no locator/timeout/budget change. Corrected CI/new candidate lab pending; supported disposal remains unconfirmed with recovery-busy. [Negative evidence](../VERIFICATION.md#simplicity-native-stop-label-failure--31-october-2026).
+
 CI56948aa passed formatting/lint/types;91renderer passed/2failed on obsolete Claude/xAI UI queries. Test-only correction targets the pending Checking… label and provider-row connection states, with connected preconditions and all isolation/model-selection/busy checks retained. Helpers/Rust/build not reached. Await corrected CI before native dispatch.
 
 CI d36fae9 passed formatting, then failed ESLint on a stale Check icon import in App.tsx. Import-only correction authored; types/tests/Rust/build were not reached. Await corrected CI before artifact authentication/native dispatch.
@@ -13,3 +15,5 @@ PV-PROVIDER-002 continues supported subscription-route qualification. Real API a
 PV-PERF-006 remains open: prior typing 128.2835 ms exceeded 120 ms; latest p95 97.2408 ms/max 117.9308 ms passed unchanged 120/500 ms budgets but proves no causal CPU/latency/RAM improvement. Complete CPU 19,898.173 ms/11,689 samples/0 backward steps. Prior failures remain retained.
 
 Supported disposal bd02f6ed9e0948e7bde1afdf50246e1c completed at 14:51:59.9771985Z, Boot 30→31, with one restart/cleanup and mechanical dispatch, process-tree, task-observer and workspace proof. The original unknown/exit 0/exited-zero result is retained; cleanupConfirmed=true/aborted-by-reset and retirement of the original reservation are recorded separately. Fresh 14:52:40.2998849Z status was ready and available, with no reservation or cleanup fence. Inputs moved privately after receipt; the DPAPI guard/token and older roots remain intact. No active root job/recovery; future turns need fresh probe/preflight and a new candidate/request/guard. Current checkpoint changes docs only; no duplicate unchanged native run. No local app/tests/build/UI/provider execution or paid call. [Custody](../handoff/CURRENT-HANDOFF.md).
+
+Native dispatch is blocked by the owned failed job’s unconfirmed cleanup: recovery e6d63542ac294781b9b7f54fc8ebcfbe returned recovery-busy, including one same-request resume. CI/source correction can proceed. Keep reservation/DPAPI guard/input/evidence; use only the same supported recovery request, no runner/ledger/hypervisor bypass.
