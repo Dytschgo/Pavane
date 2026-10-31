@@ -287,3 +287,38 @@ it("filters and selects Claude without exposing unsupported reasoning options", 
     screen.getByRole("button", { name: "Model: Claude test. Change model" }),
   ).toBeInTheDocument();
 });
+
+it("filters xAI and applies only its returned reasoning choices", async () => {
+  const user = userEvent.setup();
+  render(
+    <Harness
+      catalog={[
+        ...models,
+        { id: "gemini:test", name: "Gemini test", provider: "Gemini" },
+        { id: "claude:test", name: "Claude test", provider: "Claude" },
+        {
+          id: "xai:opaque-model-id",
+          name: "Grok text",
+          provider: "xAI",
+          reasoningEfforts: ["low", "high"],
+          defaultReasoningEffort: "low",
+        },
+      ]}
+    />,
+  );
+  await user.click(await screen.findByRole("button", { name: "xAI API" }));
+  const search = screen.getByRole("combobox");
+  await user.type(search, "Grok");
+  expect(screen.getAllByRole("option")).toHaveLength(1);
+  await user.keyboard("{ArrowRight}");
+  const high = await screen.findByRole("radio", { name: "High" });
+  expect(
+    screen.queryByRole("radio", { name: /^Fast/ }),
+  ).not.toBeInTheDocument();
+  await user.click(high);
+  expect(
+    screen.getByRole("button", {
+      name: "Model: Grok text, High. Change model",
+    }),
+  ).toBeInTheDocument();
+});

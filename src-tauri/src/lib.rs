@@ -3,6 +3,8 @@ mod codex;
 mod credentials;
 mod gemini_api;
 mod process_scope;
+mod sse;
+mod xai_api;
 pub use process_scope::run_host as run_provider_host;
 mod provider;
 
@@ -33,6 +35,7 @@ struct Runtime {
     codex: codex::Manager,
     gemini: gemini_api::Manager,
     claude: claude_api::Manager,
+    xai: xai_api::Manager,
 }
 
 impl Runtime {
@@ -232,11 +235,12 @@ struct Catalog {
 
 #[tauri::command]
 async fn discover_providers(runtime: State<'_, Arc<Runtime>>) -> Result<Catalog, String> {
-    let (codex, ollama, gemini, claude) = tokio::join!(
+    let (codex, ollama, gemini, claude, xai) = tokio::join!(
         runtime.codex.catalog(),
         provider::discover(&runtime.client),
         runtime.gemini.catalog(),
-        runtime.claude.catalog()
+        runtime.claude.catalog(),
+        runtime.xai.catalog()
     );
     let mut models = Vec::new();
     let mut providers = Vec::new();
@@ -298,6 +302,19 @@ async fn discover_providers(runtime: State<'_, Arc<Runtime>>) -> Result<Catalog,
             limits: vec![],
         }),
     }
+    match xai {
+        Ok((available, status)) => {
+            models.extend(available);
+            providers.push(status);
+        }
+        Err(detail) => providers.push(codex::Status {
+            id: "xai".into(),
+            name: "xAI API".into(),
+            state: "unavailable".into(),
+            detail,
+            limits: vec![],
+        }),
+    }
     Ok(Catalog { models, providers })
 }
 
@@ -326,6 +343,15 @@ async fn remove_claude_connection(runtime: State<'_, Arc<Runtime>>) -> Result<()
 }
 
 #[tauri::command]
+async fn save_xai_key(runtime: State<'_, Arc<Runtime>>, key: String) -> Result<(), String> {
+    runtime.xai.save_key(key).await
+}
+#[tauri::command]
+async fn remove_xai_key(runtime: State<'_, Arc<Runtime>>) -> Result<(), String> {
+    runtime.xai.remove_key().await
+}
+
+#[tauri::command]
 async fn send_message(
     runtime: State<'_, Arc<Runtime>>,
     chat_id: String,
@@ -338,15 +364,19 @@ async fn send_message(
     if models.is_empty() || models.len() > 4 {
         return Err("Choose one to four models.".into());
     }
-    let mut gemini_keys: GeminiKeys = HashMap::new();
+    let mut gemini_keys: KeySnapshots = HashMap::new();
     let mut claude_keys: ClaudeKeys = HashMap::new();
+    let mut xai_keys: KeySnapshots = HashMap::new();
     if models.iter().any(|model| {
         !(model.starts_with("ollama:")
             || model.starts_with("codex:")
             || model.starts_with("gemini:")
-            || model.starts_with("claude:"))
+            || model.starts_with("claude:")
+            || model.starts_with("xai:"))
             || model.split_once(':').is_none_or(|(_, id)| id.is_empty())
-            || (!(model.starts_with("gemini:") || model.starts_with("claude:"))
+            || (!(model.starts_with("gemini:")
+                || model.starts_with("claude:")
+                || model.starts_with("xai:"))
                 && (model.ends_with(":cloud") || model.ends_with("-cloud")))
     }) {
         return Err("Connect an available provider and choose a model.".into());
@@ -368,6 +398,13 @@ async fn send_message(
                 .entry(model.clone())
                 .or_default()
                 .push_back(authorization);
+        }
+        if model.starts_with("xai:") {
+            let key = runtime
+                .xai
+                .authorize(model, &options.get(model).cloned().unwrap_or_default())
+                .await?;
+            xai_keys.entry(model.clone()).or_default().push_back(key);
         }
         if model.starts_with("codex:") {
             let selected = options.get(model).cloned().unwrap_or_default();
@@ -407,7 +444,13 @@ async fn send_message(
     }
     drop(active);
     for (run, token) in runs.iter().cloned().zip(tokens) {
-        let request = request_for_run(&run, &options, &mut gemini_keys, &mut claude_keys);
+        let request = request_for_run(
+            &run,
+            &options,
+            &mut gemini_keys,
+            &mut claude_keys,
+            &mut xai_keys,
+        );
         let (runtime, context, instructions, channel) = (
             runtime.clone(),
             context.clone(),
@@ -425,16 +468,18 @@ struct ProviderRequest {
     options: provider::ModelOptions,
     gemini_key: Option<credentials::Secret>,
     claude_authorization: Option<claude_api::Authorization>,
+    xai_key: Option<credentials::Secret>,
 }
 
-type GeminiKeys = HashMap<String, VecDeque<credentials::Secret>>;
+type KeySnapshots = HashMap<String, VecDeque<credentials::Secret>>;
 type ClaudeKeys = HashMap<String, VecDeque<claude_api::Authorization>>;
 
 fn request_for_run(
     run: &Run,
     options: &HashMap<String, provider::ModelOptions>,
-    keys: &mut GeminiKeys,
+    keys: &mut KeySnapshots,
     claude_keys: &mut ClaudeKeys,
+    xai_keys: &mut KeySnapshots,
 ) -> ProviderRequest {
     ProviderRequest {
         options: options.get(&run.model).cloned().unwrap_or_default(),
@@ -443,6 +488,7 @@ fn request_for_run(
         claude_authorization: claude_keys
             .get_mut(&run.model)
             .and_then(VecDeque::pop_front),
+        xai_key: xai_keys.get_mut(&run.model).and_then(VecDeque::pop_front),
     }
 }
 
@@ -537,6 +583,20 @@ async fn run_model(
                     on_delta,
                 )
                 .await
+        } else if run.model.starts_with("xai:") {
+            runtime
+                .xai
+                .stream(
+                    &run.model,
+                    request
+                        .xai_key
+                        .ok_or("xAI request has no credential snapshot.")?,
+                    &context,
+                    instructions.as_deref(),
+                    &request.options,
+                    on_delta,
+                )
+                .await
         } else {
             provider::stream(
                 &runtime.client,
@@ -614,6 +674,7 @@ pub fn run() {
                 codex: codex::Manager::new(database.join("codex-workspace")),
                 gemini: gemini_api::Manager::new(&database),
                 claude: claude_api::Manager::new(&database),
+                xai: xai_api::Manager::new(&database),
             });
             runtime.cleanup().map_err(std::io::Error::other)?;
             app.manage(runtime.clone());
@@ -646,6 +707,8 @@ pub fn run() {
             remove_gemini_key,
             save_claude_connection,
             remove_claude_connection,
+            save_xai_key,
+            remove_xai_key,
             send_message,
             open_external_url
         ])
@@ -696,7 +759,7 @@ mod credential_queue_tests {
         let (_, runs) = store
             .begin_turn(&chat.id, "synthetic prompt", &models, 1)
             .unwrap();
-        let mut keys: GeminiKeys = HashMap::new();
+        let mut keys: KeySnapshots = HashMap::new();
         keys.insert(
             "gemini:first".into(),
             VecDeque::from([
@@ -710,7 +773,15 @@ mod credential_queue_tests {
         );
         let requests: Vec<_> = runs
             .iter()
-            .map(|run| request_for_run(run, &HashMap::new(), &mut keys, &mut HashMap::new()))
+            .map(|run| {
+                request_for_run(
+                    run,
+                    &HashMap::new(),
+                    &mut keys,
+                    &mut HashMap::new(),
+                    &mut HashMap::new(),
+                )
+            })
             .collect();
         assert_eq!(
             requests[0].gemini_key.as_ref().unwrap().as_bytes(),

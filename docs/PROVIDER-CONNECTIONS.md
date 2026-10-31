@@ -53,3 +53,7 @@ The next bounded implementation is the [Claude Console-key/workspace contract](C
 Claude API source is now authored under [PV-CLAUDE-API-001](CLAUDE-API.md), with CI and native verification pending. The separate unmodified binary qualification candidate and prohibition on collecting consumer tokens are unchanged.
 
 Claude API acceptance at e24aa5c: CI mocks/vault/renderer plus actual empty-profile native controls passed; live key/model/account inference remains unverified. The separate unmodified Claude Code subscription candidate is unchanged. [Exact evidence](VERIFICATION.md#claude-api-ci-and-native-controls-accepted--31-october-2026).
+
+## xAI route qualification and source — 31 October
+
+The [xAI API slice](XAI-API.md) is source-authored with CI/native verification pending. Current official Responses documentation and the pinned xAI-linked adapter/recordings establish typed terminal events; generic Chat examples and a bare [DONE] are not completion proof. Separate Grok Build subscription login is documented, but pinned ACP flag forwarding, Windows confinement and startup side effects prevent a qualified plain-chat launcher here. No CLI installation/auth access or live provider request was used; preserve both route distinctions.

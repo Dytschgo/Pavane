@@ -714,6 +714,50 @@ try {
   checks.push(
     "Claude API connection masks input, validates workspace/key together and removes only the empty profile connection without provider calls",
   );
+  const xaiKey = page.getByLabel("xAI API key", { exact: true });
+  await xaiKey.scrollIntoViewIfNeeded();
+  assert.equal(await xaiKey.getAttribute("type"), "password");
+  assert.equal(await xaiKey.inputValue(), "");
+  const saveXai = page.getByRole("button", {
+    name: "Save xAI key",
+    exact: true,
+  });
+  assert.equal(await saveXai.isDisabled(), true);
+  await xaiKey.fill("invalid key");
+  assert.equal(await xaiKey.getAttribute("aria-invalid"), "true");
+  assert.equal(await saveXai.isDisabled(), true);
+  await page
+    .getByText("Use an API key without spaces or non-ASCII characters.", {
+      exact: true,
+    })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(evidence, "native-xai-validation.png") });
+  // This profile still has no xAI key. Exercise native removal only, never save
+  // a valid-looking key or contact the real xAI API from the UI fixture.
+  await page
+    .getByRole("button", { name: "Remove xAI key", exact: true })
+    .click();
+  await page.getByText("xAI API key removed.", { exact: true }).waitFor();
+  await page
+    .getByText(
+      "Add an xAI API key. API usage has separate limits and billing.",
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(await xaiKey.inputValue(), "");
+  await page
+    .getByRole("button", { name: "Get xAI API key", exact: true })
+    .scrollIntoViewIfNeeded();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-xai-connection.png") });
+  checks.push(
+    "xAI API connection masks/rejects invalid input and removes only the empty profile key without provider calls",
+  );
   await page.keyboard.press("Escape");
   assert.equal(await page.getByRole("dialog").count(), 0);
   checks.push(

@@ -28,6 +28,8 @@ const mocked = vi.hoisted(() => ({
   updateWorkspace: vi.fn(),
   saveGeminiKey: vi.fn(),
   removeGeminiKey: vi.fn(),
+  saveXaiKey: vi.fn(),
+  removeXaiKey: vi.fn(),
   saveClaudeConnection: vi.fn(),
   removeClaudeConnection: vi.fn(),
   send: vi.fn(),
@@ -900,4 +902,107 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   ).toBeInTheDocument();
   expect(mocked.removeClaudeConnection).toHaveBeenCalledTimes(1);
   expect(mocked.removeGeminiKey).not.toHaveBeenCalled();
+});
+
+it("invalidates only xAI while discovery is pending and preserves its unavailable selection", async () => {
+  const codex = connectSol();
+  const remaining: Catalog = {
+    models: [
+      ...codex.models,
+      { id: "gemini:gemini-test", name: "Gemini test", provider: "Gemini" },
+      { id: "claude:opaque-model-id", name: "Claude test", provider: "Claude" },
+    ],
+    providers: [
+      {
+        id: "gemini",
+        name: "Gemini API",
+        state: "connected",
+        detail: "Gemini access retained",
+        limits: [],
+      },
+      {
+        id: "claude",
+        name: "Claude API",
+        state: "connected",
+        detail: "Claude access retained",
+        limits: [],
+      },
+    ],
+  };
+  mocked.catalog.mockResolvedValue({
+    ...remaining,
+    providers: [
+      ...remaining.providers,
+      {
+        id: "xai",
+        name: "xAI API",
+        state: "connected",
+        detail: "xAI synthetic access",
+        limits: [],
+      },
+    ],
+    models: [
+      ...remaining.models,
+      { id: "xai:opaque-model-id", name: "xAI test", provider: "xAI" },
+    ],
+  });
+  mocked.removeXaiKey.mockResolvedValue(undefined);
+  render(<App />);
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Sol, Low. Change model",
+    }),
+  );
+  fireEvent.click(await screen.findByRole("option", { name: /xAI test/ }));
+  await screen.findByRole("button", {
+    name: "Model: xAI test. Change model",
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Connections and settings" }),
+  );
+  await screen.findByLabelText("xAI API key");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+  );
+  let finish!: (catalog: Catalog) => void;
+  mocked.catalog.mockReturnValue(
+    new Promise<Catalog>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Remove xAI key" }));
+  await screen.findByText("xAI API key removed.");
+  expect(screen.getByText("3 models ready")).toBeInTheDocument();
+  expect(screen.getByText("Gemini access retained")).toBeInTheDocument();
+  expect(screen.getByText("Claude access retained")).toBeInTheDocument();
+  expect(screen.queryByText("xAI synthetic access")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Connecting models. Change model",
+    }),
+  );
+  expect(
+    await screen.findByRole("option", { name: /Gemini test/ }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /Sol/ })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /xAI test/ }),
+  ).not.toBeInTheDocument();
+  await act(async () => finish(remaining));
+  expect(
+    await screen.findByRole("button", {
+      name: "Model: Model unavailable. Change model",
+    }),
+  ).toBeInTheDocument();
+  expect(mocked.removeXaiKey).toHaveBeenCalledTimes(1);
+  expect(mocked.removeGeminiKey).not.toHaveBeenCalled();
+  expect(mocked.removeClaudeConnection).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("option", { name: /Claude test/ }),
+  ).toBeInTheDocument();
 });

@@ -29,7 +29,9 @@ export const ChatMessage = memo(function ChatMessage({
         ? "Gemini"
         : message.model?.startsWith("claude:")
           ? "Claude"
-          : "Ollama");
+          : message.model?.startsWith("xai:")
+            ? "xAI"
+            : "Ollama");
   const ProviderIcon = providerPresentation(provider).chatIcon;
   const name =
     model?.name ?? message.model?.split(":").slice(1).join(":") ?? "Assistant";

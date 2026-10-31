@@ -1,3 +1,4 @@
+use crate::sse::Decoder;
 use crate::{
     codex::Status,
     credentials::{ClaudeCredential, ClaudeVault, wipe},
@@ -12,7 +13,8 @@ use tokio::sync::Mutex;
 
 const ORIGIN: &str = "https://api.anthropic.com/v1";
 const VERSION: &str = "2026-10-21";
-const MAX_FRAME: usize = 256 * 1024;
+#[cfg(test)]
+use crate::sse::MAX_FRAME;
 const MAX_WIRE: usize = 32 * 1024 * 1024;
 const INVALID_STREAM: &str = "Claude returned an invalid or unsupported text response.";
 
@@ -447,7 +449,7 @@ impl Http {
             return Err(INVALID_STREAM.into());
         }
         let mut stream = response.bytes_stream();
-        let mut decoder = Decoder::default();
+        let mut decoder = Decoder::new(INVALID_STREAM);
         let mut state = TextStream::default();
         let mut wire = 0usize;
         while let Some(chunk) = stream.next().await {
@@ -576,76 +578,6 @@ impl TextStream {
             // controls or payloads require an explicit implementation decision.
             _ if value.as_object().is_some_and(|object| object.keys().all(|key| key == "type")) => {},
             _ => return Err(INVALID_STREAM.into()),
-        }
-        Ok(false)
-    }
-}
-
-#[derive(Default)]
-struct Decoder {
-    line: Vec<u8>,
-    data: Vec<u8>,
-    event: Option<String>,
-    after_cr: bool,
-}
-
-impl Decoder {
-    fn push(
-        &mut self,
-        bytes: &[u8],
-        mut emit: impl FnMut(Value) -> Result<bool, String>,
-    ) -> Result<bool, String> {
-        for byte in bytes {
-            if self.after_cr {
-                self.after_cr = false;
-                if *byte == b'\n' {
-                    continue;
-                }
-            }
-            if *byte == b'\r' || *byte == b'\n' {
-                self.after_cr = *byte == b'\r';
-                if self.line.is_empty() {
-                    if !self.data.is_empty() {
-                        let event: Value =
-                            serde_json::from_slice(&self.data).map_err(|_| INVALID_STREAM)?;
-                        self.data.clear();
-                        if self
-                            .event
-                            .take()
-                            .is_some_and(|kind| event["type"].as_str() != Some(kind.as_str()))
-                        {
-                            return Err(INVALID_STREAM.into());
-                        }
-                        if emit(event)? {
-                            return Ok(true);
-                        }
-                    } else {
-                        self.event = None;
-                    }
-                } else if self.line.starts_with(b"data:") {
-                    let data = self.line[5..].strip_prefix(b" ").unwrap_or(&self.line[5..]);
-                    if self.data.len() + data.len() + 1 > MAX_FRAME {
-                        return Err("Claude response event is too large.".into());
-                    }
-                    if !self.data.is_empty() {
-                        self.data.push(b'\n');
-                    }
-                    self.data.extend_from_slice(data);
-                } else if self.line.starts_with(b"event:") {
-                    let kind = self.line[6..].strip_prefix(b" ").unwrap_or(&self.line[6..]);
-                    self.event = Some(
-                        std::str::from_utf8(kind)
-                            .map_err(|_| INVALID_STREAM)?
-                            .into(),
-                    );
-                }
-                self.line.clear();
-            } else {
-                if self.line.len() >= MAX_FRAME {
-                    return Err("Claude response line is too large.".into());
-                }
-                self.line.push(*byte);
-            }
         }
         Ok(false)
     }

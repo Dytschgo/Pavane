@@ -103,6 +103,7 @@ try {
     $artifacts += 'performance-candidate-reading.png'
     $artifacts += 'native-claude-connection.png'
     $artifacts += 'native-claude-validation.png'
+    $artifacts += 'native-xai-connection.png', 'native-xai-validation.png'
     $artifacts += 'performance-candidate-failure.png'
     $artifacts += 'cpu-profile-candidate.json'
       $artifacts += 'native-workspace-edit.png'

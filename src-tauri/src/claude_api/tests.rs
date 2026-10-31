@@ -331,7 +331,7 @@ async fn status_errors_do_not_echo_remote_body_or_follow_redirects_or_retry() {
 #[test]
 fn sse_preserves_fragmented_utf8_crlf_and_validates_named_event_type() {
     let source = sse(&events("Grüezi 🦀", "end_turn"));
-    let mut decoder = Decoder::default();
+    let mut decoder = Decoder::new(INVALID_STREAM);
     let mut state = TextStream::default();
     let mut output = String::new();
     let mut done = false;
@@ -348,19 +348,19 @@ fn sse_preserves_fragmented_utf8_crlf_and_validates_named_event_type() {
     assert!(done);
     assert_eq!(output, "Grüezi 🦀");
     assert!(
-        Decoder::default()
+        Decoder::new(INVALID_STREAM)
             .push(b"event: ping\ndata: {\"type\":\"error\"}\n\n", |_| Ok(
                 false
             ))
             .is_err()
     );
     assert!(
-        Decoder::default()
+        Decoder::new(INVALID_STREAM)
             .push(b"data: \xff\n\n", |_| Ok(false))
             .is_err()
     );
     assert!(
-        Decoder::default()
+        Decoder::new(INVALID_STREAM)
             .push(&vec![b'x'; MAX_FRAME + 1], |_| Ok(false))
             .is_err()
     );
@@ -485,7 +485,7 @@ fn actual_persisted_duplicate_runs_receive_distinct_claude_connection_snapshots(
             },
         ]),
     );
-    let mut gemini = crate::GeminiKeys::new();
+    let mut gemini = crate::KeySnapshots::new();
     let requests: Vec<_> = runs
         .iter()
         .map(|run| {
@@ -494,6 +494,7 @@ fn actual_persisted_duplicate_runs_receive_distinct_claude_connection_snapshots(
                 &std::collections::HashMap::new(),
                 &mut gemini,
                 &mut keys,
+                &mut crate::KeySnapshots::new(),
             )
         })
         .collect();

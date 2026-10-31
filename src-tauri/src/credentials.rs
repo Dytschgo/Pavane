@@ -18,6 +18,10 @@ const CLAUDE_READ_ERROR: &str = "Cannot read the saved Claude API connection.";
 const UNSUPPORTED: &str = "Gemini API key storage is supported only on Windows.";
 #[cfg(not(windows))]
 const CLAUDE_UNSUPPORTED: &str = "Claude API connection storage is supported only on Windows.";
+#[cfg(not(windows))]
+const XAI_UNSUPPORTED: &str = "xAI API key storage is supported only on Windows.";
+#[cfg(windows)]
+const XAI_READ_ERROR: &str = "Cannot read the saved xAI API key.";
 
 /// Native-only secret: deliberately neither serializable nor cloneable.
 pub(crate) struct Secret {
@@ -183,6 +187,11 @@ pub(crate) struct ClaudeVault {
     target: Vec<u16>,
 }
 
+pub(crate) struct XaiVault {
+    #[cfg(windows)]
+    target: Vec<u16>,
+}
+
 #[cfg(windows)]
 mod windows {
     use super::*;
@@ -204,6 +213,9 @@ mod windows {
         "Cannot select Claude API connection storage for this profile.";
     const CLAUDE_WRITE_ERROR: &str = "Cannot save the Claude API connection.";
     const CLAUDE_DELETE_ERROR: &str = "Cannot remove the saved Claude API connection.";
+    const XAI_PROFILE_ERROR: &str = "Cannot select xAI API key storage for this profile.";
+    const XAI_WRITE_ERROR: &str = "Cannot save the xAI API key.";
+    const XAI_DELETE_ERROR: &str = "Cannot remove the saved xAI API key.";
 
     // One process-wide boundary across all profile handles. Keep the synchronous
     // OS operation and read-buffer disposal together; never hold this over HTTP
@@ -362,6 +374,36 @@ mod windows {
         }
     }
 
+    impl XaiVault {
+        pub(crate) fn new(directory: &Path) -> Result<Self, String> {
+            Ok(Self {
+                target: profile_target(directory, "Pavane/xAI/v1/", XAI_PROFILE_ERROR)?,
+            })
+        }
+
+        pub(crate) fn read(&self) -> Result<Option<Secret>, String> {
+            read_credential(&self.target, MAX_KEY_BYTES, XAI_READ_ERROR, |bytes| {
+                Secret::from_bytes(bytes.to_vec()).map_err(|_| XAI_READ_ERROR.into())
+            })
+        }
+
+        pub(crate) fn write(&self, mut secret: Secret) -> Result<(), String> {
+            write_credential(&self.target, &mut secret.bytes, XAI_WRITE_ERROR)
+        }
+
+        pub(crate) fn delete(&self) -> Result<(), String> {
+            delete_credential(&self.target, XAI_DELETE_ERROR)
+        }
+
+        #[cfg(test)]
+        pub(super) fn write_fixture_blob(&self, bytes: Vec<u8>) {
+            let mut blob = WipeBuffer(bytes);
+            assert!(blob.0.len() <= CRED_MAX_CREDENTIAL_BLOB_SIZE as usize);
+            // Test-only malformed OS value; production accepts only validated Secret.
+            write_credential(&self.target, &mut blob.0, XAI_WRITE_ERROR).unwrap();
+        }
+    }
+
     struct CredentialBuffer(NonNull<CREDENTIALW>);
 
     impl Drop for CredentialBuffer {
@@ -421,6 +463,25 @@ impl ClaudeVault {
 
     pub(crate) fn delete(&self) -> Result<(), String> {
         Err(CLAUDE_UNSUPPORTED.into())
+    }
+}
+
+#[cfg(not(windows))]
+impl XaiVault {
+    pub(crate) fn new(_directory: &Path) -> Result<Self, String> {
+        Err(XAI_UNSUPPORTED.into())
+    }
+
+    pub(crate) fn read(&self) -> Result<Option<Secret>, String> {
+        Err(XAI_UNSUPPORTED.into())
+    }
+
+    pub(crate) fn write(&self, _secret: Secret) -> Result<(), String> {
+        Err(XAI_UNSUPPORTED.into())
+    }
+
+    pub(crate) fn delete(&self) -> Result<(), String> {
+        Err(XAI_UNSUPPORTED.into())
     }
 }
 
@@ -570,6 +631,14 @@ mod tests {
             Err(CLAUDE_UNSUPPORTED.into())
         );
         assert_eq!(claude.delete(), Err(CLAUDE_UNSUPPORTED.into()));
+        assert!(matches!(XaiVault::new(Path::new("missing")), Err(e) if e == XAI_UNSUPPORTED));
+        let xai = XaiVault {};
+        assert!(matches!(xai.read(), Err(e) if e == XAI_UNSUPPORTED));
+        assert_eq!(
+            xai.write(Secret::new("fake-xai-key".into()).unwrap()),
+            Err(XAI_UNSUPPORTED.into())
+        );
+        assert_eq!(xai.delete(), Err(XAI_UNSUPPORTED.into()));
     }
 
     #[cfg(windows)]
@@ -888,6 +957,207 @@ mod tests {
                     .write(connection("fake-panic-key", Some("wrkspc_panic")))
                     .unwrap();
                 panic!("exercise disposable Claude credential cleanup");
+            });
+            assert!(result.is_err());
+            assert!(observer.read().unwrap().is_none());
+        }
+
+        struct XaiFixture {
+            xai: XaiVault,
+            gemini: Vault,
+            claude: ClaudeVault,
+            directory: tempfile::TempDir,
+        }
+
+        impl XaiFixture {
+            fn new() -> Self {
+                let directory = tempfile::Builder::new()
+                    .prefix("pavane-xai-vault-test-")
+                    .tempdir()
+                    .unwrap();
+                Self {
+                    xai: XaiVault::new(directory.path()).unwrap(),
+                    gemini: Vault::new(directory.path()).unwrap(),
+                    claude: ClaudeVault::new(directory.path()).unwrap(),
+                    directory,
+                }
+            }
+        }
+
+        impl Drop for XaiFixture {
+            fn drop(&mut self) {
+                let _ = self.xai.delete();
+                let _ = self.gemini.delete();
+                let _ = self.claude.delete();
+            }
+        }
+
+        fn assert_xai_key(vault: &XaiVault, expected: &[u8]) {
+            assert_eq!(vault.read().unwrap().unwrap().as_bytes(), expected);
+        }
+
+        #[test]
+        fn xai_namespace_and_removal_are_isolated_from_gemini_and_claude() {
+            use std::os::windows::ffi::OsStrExt;
+
+            let fixture = XaiFixture::new();
+            let mut expected_target: Vec<u16> = "Pavane/xAI/v1/"
+                .encode_utf16()
+                .chain(
+                    fixture
+                        .directory
+                        .path()
+                        .canonicalize()
+                        .unwrap()
+                        .as_os_str()
+                        .encode_wide(),
+                )
+                .collect();
+            expected_target.push(0);
+            assert!(fixture.xai.target == expected_target);
+            assert!(fixture.xai.target != fixture.gemini.target);
+            assert!(fixture.xai.target != fixture.claude.target);
+            fixture
+                .xai
+                .write(Secret::new("fake-xai-key".into()).unwrap())
+                .unwrap();
+            fixture
+                .gemini
+                .write(Secret::new("fake-gemini-key".into()).unwrap())
+                .unwrap();
+            fixture
+                .claude
+                .write(connection("fake-claude-key", Some("wrkspc_existing")))
+                .unwrap();
+
+            fixture.gemini.delete().unwrap();
+            assert_xai_key(&fixture.xai, b"fake-xai-key");
+            assert!(
+                fixture
+                    .claude
+                    .read()
+                    .unwrap()
+                    .unwrap()
+                    .same_identity(&connection("fake-claude-key", Some("wrkspc_existing")))
+            );
+            fixture
+                .gemini
+                .write(Secret::new("fake-gemini-key".into()).unwrap())
+                .unwrap();
+            fixture.claude.delete().unwrap();
+            assert_xai_key(&fixture.xai, b"fake-xai-key");
+            assert_key(&fixture.gemini, b"fake-gemini-key");
+            fixture
+                .claude
+                .write(connection("fake-claude-key", None))
+                .unwrap();
+            fixture.xai.delete().unwrap();
+            assert_key(&fixture.gemini, b"fake-gemini-key");
+            assert!(
+                fixture
+                    .claude
+                    .read()
+                    .unwrap()
+                    .unwrap()
+                    .same_identity(&connection("fake-claude-key", None))
+            );
+        }
+
+        #[test]
+        fn xai_reopens_canonical_profile_and_preserves_other_profiles() {
+            let first = XaiFixture::new();
+            let second = XaiFixture::new();
+            let reopened = XaiVault::new(&first.directory.path().join(".")).unwrap();
+            assert!(reopened.read().unwrap().is_none());
+            first
+                .xai
+                .write(Secret::new("fake-first-xai-key".into()).unwrap())
+                .unwrap();
+            assert_xai_key(&reopened, b"fake-first-xai-key");
+            assert!(second.xai.read().unwrap().is_none());
+            second
+                .xai
+                .write(Secret::new("fake-second-xai-key".into()).unwrap())
+                .unwrap();
+            first.xai.delete().unwrap();
+            assert!(reopened.read().unwrap().is_none());
+            assert_xai_key(&second.xai, b"fake-second-xai-key");
+        }
+
+        #[test]
+        fn rejected_xai_input_preserves_value_and_replacement_maximum_and_removal_work() {
+            let fixture = XaiFixture::new();
+            fixture
+                .xai
+                .write(Secret::new("fake-original-xai-key".into()).unwrap())
+                .unwrap();
+            for invalid in [
+                String::new(),
+                "bad key".into(),
+                "x".repeat(MAX_KEY_BYTES + 1),
+            ] {
+                assert!(
+                    Secret::new(invalid)
+                        .and_then(|key| fixture.xai.write(key))
+                        .is_err()
+                );
+                assert_xai_key(&fixture.xai, b"fake-original-xai-key");
+            }
+            fixture
+                .xai
+                .write(Secret::new("fake-replacement-xai-key".into()).unwrap())
+                .unwrap();
+            assert_xai_key(&fixture.xai, b"fake-replacement-xai-key");
+            fixture
+                .xai
+                .write(Secret::new("x".repeat(MAX_KEY_BYTES)).unwrap())
+                .unwrap();
+            assert_eq!(
+                fixture.xai.read().unwrap().unwrap().as_bytes().len(),
+                MAX_KEY_BYTES
+            );
+            fixture.xai.delete().unwrap();
+            fixture.xai.delete().unwrap();
+            assert!(fixture.xai.read().unwrap().is_none());
+        }
+
+        #[test]
+        fn malformed_xai_os_values_fail_with_provider_specific_redacted_errors() {
+            let fixture = XaiFixture::new();
+            for bytes in [
+                b"fake key with spaces".to_vec(),
+                vec![0],
+                vec![b'x'; MAX_KEY_BYTES + 1],
+            ] {
+                fixture.xai.write_fixture_blob(bytes);
+                assert_eq!(fixture.xai.read().unwrap_err(), XAI_READ_ERROR);
+            }
+            fixture
+                .xai
+                .write(Secret::new("fake-recovered-xai-key".into()).unwrap())
+                .unwrap();
+            assert_xai_key(&fixture.xai, b"fake-recovered-xai-key");
+        }
+
+        #[test]
+        fn xai_fixture_cleanup_survives_panic_and_invalid_profile_errors_are_redacted() {
+            let fixture = XaiFixture::new();
+            assert!(
+                matches!(XaiVault::new(&fixture.directory.path().join("missing")), Err(error) if error == "Cannot select xAI API key storage for this profile.")
+            );
+            let file = tempfile::NamedTempFile::new_in(fixture.directory.path()).unwrap();
+            assert!(
+                matches!(XaiVault::new(file.path()), Err(error) if error == "Cannot select xAI API key storage for this profile.")
+            );
+            drop(file);
+            let observer = XaiVault::new(fixture.directory.path()).unwrap();
+            let result = std::panic::catch_unwind(move || {
+                let fixture = fixture;
+                fixture
+                    .xai
+                    .write(Secret::new("fake-panic-xai-key".into()).unwrap())
+                    .unwrap();
+                panic!("exercise disposable xAI credential cleanup");
             });
             assert!(result.is_err());
             assert!(observer.read().unwrap().is_none());

@@ -2,6 +2,7 @@ import {
   Asterisk,
   AudioLines,
   Cpu,
+  Orbit,
   Sparkles,
   SquareTerminal,
 } from "lucide-react";
@@ -11,6 +12,7 @@ const providers = {
   ollama: { label: "Ollama", icon: Cpu, chatIcon: AudioLines },
   gemini: { label: "Gemini API", icon: Sparkles, chatIcon: Sparkles },
   claude: { label: "Claude API", icon: Asterisk, chatIcon: Asterisk },
+  xai: { label: "xAI API", icon: Orbit, chatIcon: Orbit },
 };
 
 export function providerPresentation(provider: string) {

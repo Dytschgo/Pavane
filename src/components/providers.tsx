@@ -2,6 +2,7 @@ import { Check, LoaderCircle, RefreshCw } from "lucide-react";
 import type { Model, ProviderStatus } from "../lib/types";
 import { Button } from "./ui/button";
 import { GeminiKeyForm } from "./gemini-key-form";
+import { ApiKeyForm } from "./api-key-form";
 import { ClaudeKeyForm } from "./claude-key-form";
 import { providerPresentation } from "../lib/provider-presentation";
 
@@ -17,7 +18,7 @@ export function Providers({
   providers: ProviderStatus[];
   busy: boolean;
   onRefresh: () => void;
-  onCredentialsChanged?: (providerId: "gemini" | "claude") => void;
+  onCredentialsChanged?: (providerId: "gemini" | "claude" | "xai") => void;
   error: string | null;
 }) {
   return (
@@ -44,7 +45,7 @@ export function Providers({
           Refresh
         </Button>
       </div>
-      {["codex", "ollama", "gemini", "claude"].map((id) => {
+      {["codex", "ollama", "gemini", "claude", "xai"].map((id) => {
         const { label: name, icon: Icon } = providerPresentation(id);
         const status = providers.find((provider) => provider.id === id);
         const connected = status?.state === "connected";
@@ -66,7 +67,9 @@ export function Providers({
                           ? "Add a Gemini API key"
                           : id === "claude"
                             ? "Add a Claude Console API key"
-                            : "Local models on this device"))}
+                            : id === "xai"
+                              ? "Add an xAI Console API key"
+                              : "Local models on this device"))}
                 </span>
               </div>
               <span
@@ -139,6 +142,16 @@ export function Providers({
                 }
               />
             )}
+            {id === "xai" && (
+              <ApiKeyForm
+                provider="xai"
+                onChanged={() =>
+                  onCredentialsChanged
+                    ? onCredentialsChanged("xai")
+                    : onRefresh()
+                }
+              />
+            )}
             {id === "claude" && (
               <ClaudeKeyForm
                 onChanged={() =>
@@ -156,19 +169,6 @@ export function Providers({
           {error}
         </p>
       )}
-      <div className="settings-divider">
-        <span>MORE PROVIDERS</span>
-      </div>
-      {[{ name: "xAI", mark: "x" }].map((provider) => (
-        <div className="provider-row planned-provider" key={provider.name}>
-          <div className="provider-mark">{provider.mark}</div>
-          <div className="provider-info">
-            <strong>{provider.name}</strong>
-            <span>Subscription adapter planned</span>
-          </div>
-          <span className="badge">Planned</span>
-        </div>
-      ))}
     </div>
   );
 }
