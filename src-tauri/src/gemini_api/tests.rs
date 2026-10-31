@@ -484,14 +484,6 @@ mod managed_tests {
         let (origin, worker) = serve(vec![Reply::json(model_list())]);
         let api = manager(&profile, origin);
         api.save_key(KEY.into()).await.unwrap();
-        assert!(
-            profile
-                .vault
-                .read()
-                .unwrap()
-                .is_some_and(|key| key.as_bytes() == KEY.as_bytes()),
-            "saved synthetic credential must be visible before discovery"
-        );
         let (models, _) = api.catalog().await.unwrap_or_else(|error| {
             let current = profile.vault.read().unwrap();
             let classification = match current.as_ref() {
@@ -533,6 +525,50 @@ mod managed_tests {
         assert!(profile.vault.read().unwrap().is_none());
         worker.join().unwrap();
     }
+    #[test]
+    fn immediate_save_discover_authorize_is_stable_across_independent_profiles() {
+        const WORKERS: usize = 4;
+        const ROUNDS: usize = 16;
+        let start = Arc::new(std::sync::Barrier::new(WORKERS));
+        thread::scope(|scope| {
+            for worker_id in 0..WORKERS {
+                let start = start.clone();
+                scope.spawn(move || {
+                    start.wait();
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+                    runtime.block_on(async {
+                        let profile = Profile::new();
+                        let (origin, peer) =
+                            serve((0..ROUNDS).map(|_| Reply::json(model_list())).collect());
+                        let api = manager(&profile, origin);
+                        for round in 0..ROUNDS {
+                            let expected = format!("synthetic-stress-{worker_id}-{round}");
+                            api.save_key(expected.clone()).await.unwrap();
+                            // Preserve the original failing boundary: no extra vault
+                            // read, sleep or retry between saving and discovery.
+                            let (models, status) = api.catalog().await.unwrap_or_else(|error| {
+                                panic!("worker {worker_id}, round {round}: {error}");
+                            });
+                            assert_eq!(status.state, "connected");
+                            assert_eq!(models.len(), 1);
+                            let captured = api
+                                .authorize(&models[0].id, &ModelOptions::default())
+                                .await
+                                .unwrap();
+                            assert!(captured.as_bytes() == expected.as_bytes());
+                        }
+                        assert_eq!(peer.join().unwrap().len(), ROUNDS);
+                        api.remove_key().await.unwrap();
+                        assert!(profile.vault.read().unwrap().is_none());
+                    });
+                });
+            }
+        });
+    }
+
     #[tokio::test]
     async fn rekey_during_discovery_cannot_publish_the_old_catalog() {
         let profile = Profile::new();
