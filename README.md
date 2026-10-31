@@ -58,4 +58,4 @@ The source is public. The project owner has deferred choosing a license; no proj
 
 The [Claude API connection](docs/CLAUDE-API.md) has a protected key/workspace identity, discovered models and text streaming. CI mocks/vault/renderer and native empty-profile controls passed at e24aa5c, alongside all 17 native workflows; live account/inference remains unverified.
 
-The [xAI API connection](docs/XAI-API.md) is source-authored with protected keys, discovered text models/available reasoning choices and Responses streaming. CI/native acceptance is pending; this does not yet deliver the separately qualified Grok Build subscription route.
+The [xAI API connection](docs/XAI-API.md) has protected keys, discovered text models/available reasoning choices and Responses streaming. CI synthetic tests and 18-workflow native empty-profile acceptance passed at 0cf7e4f; real account/inference remains unverified; this does not yet deliver the separately qualified Grok Build subscription route.

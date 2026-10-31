@@ -86,3 +86,7 @@ The [Claude API slice](CLAUDE-API.md) passed CI mocks/vault/renderer and actual 
 ## xAI API candidate
 
 The [xAI API slice](XAI-API.md) is authored, not yet CI/native accepted. New regressions use disposable Windows targets and loopback HTTP. Preserve prior Gemini/Claude vault/HTTP/renderer tests while changing shared SSE framing/key-form plumbing. New native stage masks/rejects invalid xAI input and removes only the fresh profile's absent target; it saves no key or contacts a provider. Inspect native-xai-validation.png/native-xai-connection.png for narrow form/help/error/footer reachability; both are exported in finally and the private collector's native-* pattern already includes them. Live key/model/account inference, encrypted reasoning continuation and long reasoning deadlines remain unqualified. CI then one changed source-bound lab batch; no local app/tests/build/UI/vault/provider execution.
+
+## xAI native acceptance
+
+CI 0cf7e4f passed all gates and actual lab passed 18 native/release 2/full checks, including native-xai-validation.png/native-xai-connection.png. Both new captures and all 17 existing captures were inspected. The fixture saves no valid key or calls a provider; live account/inference remains open. [Exact evidence](VERIFICATION.md#xai-api-ci-and-native-controls-accepted--31-october-2026).
