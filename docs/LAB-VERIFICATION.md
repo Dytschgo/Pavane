@@ -1,5 +1,11 @@
 # Pavane Windows lab run
 
+## Current accepted baseline — 31 October, 03:10 UTC
+
+CI41162239161 passedf93104b; exact source-bound lab20261031T030540Z-2a37f514c3eb passed15native/release2/full interaction/history and a complete20352.292ms/10364sample capture with2backward steps. All5reports/15PNGs/two source metadata retained and15captures inspected. Latest unsigned tested executable/manifest saved without launch to ignored evidence/ci-build-f93104b/. Earlier typing128.2835ms failure remains open despite this run's94.7395ms pass; no optimization claim. No live Google/key inference or guest Codex login acceptance. [Exact proof](VERIFICATION.md#signed-cpu-timestamps-accepted--31-october-2026).
+
+Root recovery700dc21944284e9989eea090f9470f7b completed03:10:23.7049229Z Boot23→24/restart1cleanup1/task-observer-workspace proof, originalunknown/exit0 preserved cleanuptrue/aborted-by-reset/reservationretired. Status available/noreservation/fencefalse, readiness requires a fresh probe. No active root run/recovery; inputs moved privately, token/guards retained. Exact policy/verifier/desktop1800/noinstall/noLiveCodex unchanged. Local app/tests/build/UI prohibited. Next source-only offline-Gemini reply label/icon fix awaits CI; do not equate that successor with this tested binary.
+
 ## Saved workspace editor accepted — 31 October, 00:22 UTC
 
 CI41149006358 passed3eb83fb; actualbuild1e6f360c991b86d7baa04c02ef1cacf2e5c744c2. Hash-bound native run20261031T001900Z-0a4bb669056b passed14native/release2/full interaction-retention/profiling. New flow verified cancel/focus, UTF8 overflow, actual second-writer conflict, retained draft/explicit reload, preserved linked IDs/kind, saved UI values after reload and new instructions in the next two synthetic provider requests. Five reports/14PNGs/source metadata retained, every capture inspected. Latest unsigned test executable copied without launch to ignored evidence/ci-build-3eb83fb/. [Full provenance](VERIFICATION.md#saved-workspace-editor-accepted--31-october-2026).

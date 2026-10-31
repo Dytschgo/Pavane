@@ -4,6 +4,7 @@ import {
   Check,
   Copy,
   LoaderCircle,
+  Sparkles,
   SquareTerminal,
 } from "lucide-react";
 import type { Message, Model } from "../lib/types";
@@ -28,7 +29,11 @@ export const ChatMessage = memo(function ChatMessage({
   const model = models.find((model) => model.id === message.model);
   const provider =
     model?.provider ??
-    (message.model?.startsWith("codex:") ? "Codex" : "Ollama");
+    (message.model?.startsWith("codex:")
+      ? "Codex"
+      : message.model?.startsWith("gemini:")
+        ? "Gemini"
+        : "Ollama");
   const name =
     model?.name ?? message.model?.split(":").slice(1).join(":") ?? "Assistant";
   const running = message.status === "pending" || message.status === "running";
@@ -46,6 +51,8 @@ export const ChatMessage = memo(function ChatMessage({
           >
             {provider === "Codex" ? (
               <SquareTerminal size={15} />
+            ) : provider === "Gemini" ? (
+              <Sparkles size={15} />
             ) : (
               <AudioLines size={15} />
             )}
