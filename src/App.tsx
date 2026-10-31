@@ -1298,7 +1298,12 @@ export function App() {
                     disabled={loading || busy || (native && !currentId)}
                     maxLength={65536}
                     onKeyDown={(event) => {
-                      if (event.key === "Escape" && running && currentId) {
+                      if (
+                        event.key === "Escape" &&
+                        !event.nativeEvent.isComposing &&
+                        running &&
+                        currentId
+                      ) {
                         event.preventDefault();
                         void api.stop(currentId).catch(report);
                         return;

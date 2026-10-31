@@ -1,6 +1,6 @@
 # Gemini API connection
 
-The direct Gemini API baseline passed CI and full native verification atf93104b, including15native workflows/release2/history and a valid CPU capture. Its key/HTTP/queue regressions use CI mocks/disposable vault targets; native checks exercise an empty key profile. Live key/inference remains unverified. Earlier typing128.2835ms remains an open failure despite the latest passing94.7395ms. A later source-only fix for offline Gemini reply identity awaits CI; the tested executable remainsf93104b. [Exact evidence](VERIFICATION.md#signed-cpu-timestamps-accepted--31-october-2026), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
+The direct Gemini API baseline passed CI and full native verification atf93104b, including15native workflows/release2/history and a valid CPU capture. Its key/HTTP/queue regressions use CI mocks/disposable vault targets; native checks exercise an empty key profile. Live key/inference remains unverified. Earlier typing128.2835ms remains an open failure despite the latest passing94.7395ms. The later offline Gemini reply-identity fix passed its four renderer cases in CI288547e; that exact native visual state remains unverified and the tested executable staysf93104b. [Exact evidence](VERIFICATION.md#signed-cpu-timestamps-accepted--31-october-2026), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
 
 ## User workflow
 

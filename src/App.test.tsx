@@ -645,6 +645,42 @@ describe("durable draft interaction", () => {
   });
 });
 
+it("IME Escape leaves responses and the draft intact; normal Escape stops the chat", async () => {
+  mocked.messages.mockResolvedValue({
+    items: [
+      {
+        ...sentTurn.user,
+        id: "streaming-reply",
+        role: "assistant",
+        model: "codex:sol",
+        content: "Partial response",
+        status: "running",
+      },
+    ],
+    hasMore: false,
+  });
+  mocked.draft.mockResolvedValue("未確定の入力");
+  mocked.stop.mockResolvedValue(undefined);
+  render(<App />);
+  await screen.findByRole("button", { name: "Stop responses" });
+  const editor = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => {
+    expect(editor).toBeEnabled();
+    expect(editor).toHaveValue("未確定の入力");
+  });
+  expect(fireEvent.keyDown(editor, { key: "Escape", isComposing: true })).toBe(
+    true,
+  );
+  expect(mocked.stop).not.toHaveBeenCalled();
+  expect(editor).toHaveValue("未確定の入力");
+  expect(fireEvent.keyDown(editor, { key: "Escape", isComposing: false })).toBe(
+    false,
+  );
+  expect(mocked.stop).toHaveBeenCalledTimes(1);
+  expect(mocked.stop).toHaveBeenCalledWith(first.id);
+  expect(editor).toHaveValue("未確定の入力");
+});
+
 it("reconciles a reloaded running snapshot to terminal native state", async () => {
   const message = {
     id: "reply",

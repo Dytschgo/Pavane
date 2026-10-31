@@ -255,7 +255,37 @@ try {
     .fill("STOP_TEST");
   await page.getByRole("button", { name: "Send message", exact: true }).click();
   await page.getByText("still thinking", { exact: false }).first().waitFor();
-  await page.getByRole("button", { name: "Stop responses" }).click();
+  const composingDraft = "未確定の入力";
+  const composingEditor = page.getByRole("textbox", {
+    name: "Message",
+    exact: true,
+  });
+  await composingEditor.fill(composingDraft);
+  const activeText = page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last()
+    .locator(".message-content");
+  const beforeComposition = (await activeText.textContent()).length;
+  await composingEditor.dispatchEvent("keydown", {
+    key: "Escape",
+    code: "Escape",
+    isComposing: true,
+  });
+  // Require fresh native stream growth beyond a possible final buffered chunk,
+  // rather than an immediate visibility check that could race cancellation.
+  await page.waitForFunction((previousLength) => {
+    const replies = document.querySelectorAll(
+      'article[aria-label="Response from smoke-a"] .message-content',
+    );
+    return (
+      replies.length > 0 &&
+      (replies[replies.length - 1].textContent?.length ?? 0) >=
+        previousLength + 3 * "still thinking ".length &&
+      document.querySelector('button[aria-label="Stop responses"]') !== null
+    );
+  }, beforeComposition);
+  assert.equal(await composingEditor.inputValue(), composingDraft);
+  await page.keyboard.press("Escape");
   await page
     .getByText("Stopped. Partial text was saved.", { exact: true })
     .first()
@@ -263,6 +293,10 @@ try {
   await page
     .getByRole("button", { name: "Stop responses" })
     .waitFor({ state: "hidden" });
+  assert.equal(await composingEditor.inputValue(), composingDraft);
+  checks.push(
+    "IME composition Escape preserves ongoing native streams and draft; ordinary Escape stops responses",
+  );
   checks.push("cancel parallel streams and retain partial response");
   await page
     .getByRole("textbox", { name: "Message", exact: true })
