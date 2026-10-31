@@ -1,4 +1,5 @@
 mod codex;
+pub mod gemini;
 mod process_scope;
 pub use process_scope::run_host as run_provider_host;
 mod provider;
