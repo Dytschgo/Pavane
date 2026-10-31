@@ -981,9 +981,7 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   fireEvent.click(screen.getByRole("button", { name: "Remove connection" }));
   await screen.findByText("Claude connection removed.");
   expect(screen.getByText("2 models ready")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Recheck connections" }),
-  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Checking…" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -1077,15 +1075,29 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
       finish = resolve;
     }),
   );
+  for (const provider of ["Gemini", "Claude", "xAI"]) {
+    expect(
+      within(
+        screen.getByRole("button", { name: `Manage ${provider} API` }),
+      ).getByText("Connected"),
+    ).toBeInTheDocument();
+  }
   fireEvent.click(screen.getByRole("button", { name: "Remove xAI key" }));
   await screen.findByText("xAI API key removed.");
   expect(screen.getByText("3 models ready")).toBeInTheDocument();
-  expect(screen.getByText("Gemini access retained")).toBeInTheDocument();
-  expect(screen.getByText("Claude access retained")).toBeInTheDocument();
-  expect(screen.queryByText("xAI synthetic access")).not.toBeInTheDocument();
+  for (const provider of ["Gemini", "Claude"]) {
+    expect(
+      within(
+        screen.getByRole("button", { name: `Manage ${provider} API` }),
+      ).getByText("Connected"),
+    ).toBeInTheDocument();
+  }
   expect(
-    screen.getByRole("button", { name: "Recheck connections" }),
-  ).toBeDisabled();
+    within(screen.getByRole("button", { name: "Manage xAI API" })).getByText(
+      "Checking…",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Checking…" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),

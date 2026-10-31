@@ -1,5 +1,7 @@
 # Current plan
 
+CI56948aa passed formatting/lint/types;91renderer passed/2failed on obsolete Claude/xAI UI queries. Test-only correction targets the pending Checking… label and provider-row connection states, with connected preconditions and all isolation/model-selection/busy checks retained. Helpers/Rust/build not reached. Await corrected CI before native dispatch.
+
 CI d36fae9 passed formatting, then failed ESLint on a stale Check icon import in App.tsx. Import-only correction authored; types/tests/Rust/build were not reached. Await corrected CI before artifact authentication/native dispatch.
 
 PV-UX-SIMPLE-001 working under Sol. Dylan selected chat/connection recovery first. Official competitor research, source audit and implementation cover one Connections entry, flat provider setup/one Recheck, four working routes, fewer duplicate notices/create controls, plain warnings, draft-save retry and guarded same-model response retry retaining the original prompt/partial/draft. Source and meaningful storage/renderer/native fixtures are authored; CI and changed source-bound lab/capture inspection are pending. No new runtime acceptance. [Contract, audit and rollback](../SIMPLER-PAVANE.md). Independent persisted-retry review remains required before merge/delivery. No local app/tests/build/UI/provider/vault operation, merge or release. Latest accepted executable remains760cda9.
