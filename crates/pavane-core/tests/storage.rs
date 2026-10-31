@@ -235,13 +235,16 @@ fn workspace_edits_survive_reopen_without_replacing_linked_data() {
         .unwrap();
     let chat = store.create_chat(false, Some(&original.id), NOW).unwrap();
     let other_chat = store.create_chat(false, Some(&other.id), NOW).unwrap();
-    store.save_draft(&chat.id, "Keep my draft", NOW).unwrap();
     let (_, runs) = store
         .begin_turn(&chat.id, "Keep my message", &["m".into()], NOW)
         .unwrap();
     store
         .update_run(&runs[0], "Keep my answer", "complete", NOW)
         .unwrap();
+    // Sending intentionally clears the submitted draft. Preserve a distinct
+    // unsent draft that exists when the workspace is edited.
+    store.save_draft(&chat.id, "Keep my draft", NOW).unwrap();
+    assert_eq!(store.draft(&chat.id, NOW).unwrap(), "Keep my draft");
     let saved = store
         .update_workspace(&original, "  Writer revised  ", "New rules; 'quoted' text")
         .unwrap();
