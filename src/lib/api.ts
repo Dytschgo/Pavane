@@ -51,6 +51,9 @@ export const api = {
   catalog: () => call<Catalog>("discover_providers"),
   saveGeminiKey: (key: string) => call<void>("save_gemini_key", { key }),
   removeGeminiKey: () => call<void>("remove_gemini_key"),
+  saveClaudeConnection: (key: string, workspace: string | null) =>
+    call<void>("save_claude_connection", { key, workspace }),
+  removeClaudeConnection: () => call<void>("remove_claude_connection"),
   send: (
     chatId: string,
     content: string,

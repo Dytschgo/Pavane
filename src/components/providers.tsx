@@ -1,14 +1,9 @@
-import {
-  Check,
-  Cpu,
-  LoaderCircle,
-  RefreshCw,
-  SquareTerminal,
-  Sparkles,
-} from "lucide-react";
+import { Check, LoaderCircle, RefreshCw } from "lucide-react";
 import type { Model, ProviderStatus } from "../lib/types";
 import { Button } from "./ui/button";
 import { GeminiKeyForm } from "./gemini-key-form";
+import { ClaudeKeyForm } from "./claude-key-form";
+import { providerPresentation } from "../lib/provider-presentation";
 
 export function Providers({
   models,
@@ -22,7 +17,7 @@ export function Providers({
   providers: ProviderStatus[];
   busy: boolean;
   onRefresh: () => void;
-  onCredentialsChanged?: () => void;
+  onCredentialsChanged?: (providerId: "gemini" | "claude") => void;
   error: string | null;
 }) {
   return (
@@ -49,11 +44,8 @@ export function Providers({
           Refresh
         </Button>
       </div>
-      {[
-        { id: "codex", name: "Codex", icon: SquareTerminal },
-        { id: "ollama", name: "Ollama", icon: Cpu },
-        { id: "gemini", name: "Gemini API", icon: Sparkles },
-      ].map(({ id, name, icon: Icon }) => {
+      {["codex", "ollama", "gemini", "claude"].map((id) => {
+        const { label: name, icon: Icon } = providerPresentation(id);
         const status = providers.find((provider) => provider.id === id);
         const connected = status?.state === "connected";
         return (
@@ -72,7 +64,9 @@ export function Providers({
                         ? "Uses your existing Codex CLI subscription login"
                         : id === "gemini"
                           ? "Add a Gemini API key"
-                          : "Local models on this device"))}
+                          : id === "claude"
+                            ? "Add a Claude Console API key"
+                            : "Local models on this device"))}
                 </span>
               </div>
               <span
@@ -137,7 +131,22 @@ export function Providers({
               </p>
             )}
             {id === "gemini" && (
-              <GeminiKeyForm onChanged={onCredentialsChanged ?? onRefresh} />
+              <GeminiKeyForm
+                onChanged={() =>
+                  onCredentialsChanged
+                    ? onCredentialsChanged("gemini")
+                    : onRefresh()
+                }
+              />
+            )}
+            {id === "claude" && (
+              <ClaudeKeyForm
+                onChanged={() =>
+                  onCredentialsChanged
+                    ? onCredentialsChanged("claude")
+                    : onRefresh()
+                }
+              />
             )}
           </div>
         );
@@ -150,19 +159,12 @@ export function Providers({
       <div className="settings-divider">
         <span>MORE PROVIDERS</span>
       </div>
-      {[
-        { name: "Anthropic", mark: "A" },
-        { name: "xAI", mark: "x" },
-      ].map((provider) => (
+      {[{ name: "xAI", mark: "x" }].map((provider) => (
         <div className="provider-row planned-provider" key={provider.name}>
           <div className="provider-mark">{provider.mark}</div>
           <div className="provider-info">
             <strong>{provider.name}</strong>
-            <span>
-              {provider.name === "Anthropic"
-                ? "API-key connection planned"
-                : "Subscription adapter planned"}
-            </span>
+            <span>Subscription adapter planned</span>
           </div>
           <span className="badge">Planned</span>
         </div>

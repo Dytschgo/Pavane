@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import type { Chat, RunEvent, TurnStarted } from "./lib/types";
+import type { Catalog, Chat, RunEvent, TurnStarted } from "./lib/types";
 
 const mocked = vi.hoisted(() => ({
   listChats: vi.fn(),
@@ -28,6 +28,8 @@ const mocked = vi.hoisted(() => ({
   updateWorkspace: vi.fn(),
   saveGeminiKey: vi.fn(),
   removeGeminiKey: vi.fn(),
+  saveClaudeConnection: vi.fn(),
+  removeClaudeConnection: vi.fn(),
   send: vi.fn(),
 }));
 let resizeContent: ResizeObserverCallback;
@@ -828,4 +830,74 @@ it("removing a Gemini key preserves its selection without falling back to anothe
     screen.queryByRole("option", { name: /Gemini test/ }),
   ).not.toBeInTheDocument();
   expect(mocked.removeGeminiKey).toHaveBeenCalledTimes(1);
+});
+
+it("invalidates only Claude while discovery is pending and preserves its unavailable selection", async () => {
+  const codex = connectSol();
+  const remaining: Catalog = {
+    models: [
+      ...codex.models,
+      { id: "gemini:gemini-test", name: "Gemini test", provider: "Gemini" },
+    ],
+    providers: [],
+  };
+  mocked.catalog.mockResolvedValue({
+    ...remaining,
+    models: [
+      ...remaining.models,
+      { id: "claude:opaque-model-id", name: "Claude test", provider: "Claude" },
+    ],
+  });
+  mocked.removeClaudeConnection.mockResolvedValue(undefined);
+  render(<App />);
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Sol, Low. Change model",
+    }),
+  );
+  fireEvent.click(await screen.findByRole("option", { name: /Claude test/ }));
+  await screen.findByRole("button", {
+    name: "Model: Claude test. Change model",
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Connections and settings" }),
+  );
+  await screen.findByLabelText("Claude API key");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+  );
+  let finish!: (catalog: Catalog) => void;
+  mocked.catalog.mockReturnValue(
+    new Promise<Catalog>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Remove connection" }));
+  await screen.findByText("Claude connection removed.");
+  expect(screen.getByText("2 models ready")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Connecting models. Change model",
+    }),
+  );
+  expect(
+    await screen.findByRole("option", { name: /Gemini test/ }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /Sol/ })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /Claude test/ }),
+  ).not.toBeInTheDocument();
+  await act(async () => finish(remaining));
+  expect(
+    await screen.findByRole("button", {
+      name: "Model: Model unavailable. Change model",
+    }),
+  ).toBeInTheDocument();
+  expect(mocked.removeClaudeConnection).toHaveBeenCalledTimes(1);
+  expect(mocked.removeGeminiKey).not.toHaveBeenCalled();
 });

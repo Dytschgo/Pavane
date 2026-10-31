@@ -1,6 +1,6 @@
 # Claude connection contract — 31 October 2026
 
-PV-CLAUDE-API-001 is the next implementation slice under PV-PROVIDER-002. This is a researched contract, not a working connection. No Claude credentials, installed CLI, provider request or live account was accessed. Existing Codex/Ollama/Gemini behavior stays intact.
+PV-CLAUDE-API-001 is the next implementation slice under PV-PROVIDER-002. This contract guided the authored API slice, whose CI/native acceptance is still pending. [Implementation, verification gaps and rollback](CLAUDE-API.md). No Claude credentials, installed CLI, provider request or live account was accessed. Existing Codex/Ollama/Gemini behavior stays intact.
 
 ## Connection routes
 
@@ -14,7 +14,7 @@ Use only `https://api.anthropic.com`: `GET /v1/models` and `POST /v1/messages`. 
 
 Version 2026-10-21 rejects `temperature`, `top_p` and `top_k` on every model. Omit them and avoid copying older request examples. [Version changes](https://platform.claude.com/docs/en/api/versioning).
 
-Discover active models with the documented lifecycle filter, bounded pages and `has_more`/`last_id` → `after_id` pagination. The omitted lifecycle filter includes deprecated models. Preserve opaque IDs and returned display/capability/output-limit metadata; do not guess current model names or derive capabilities from an ID. Discovery establishes listing access, not successful inference. [Models contract](https://platform.claude.com/docs/en/api/models/list).
+Discover active models with the documented lifecycle filter, bounded pages and `has_more`/`last_id` → `after_id` pagination. The omitted lifecycle filter includes deprecated models. Preserve opaque IDs and display names; use the returned positive output maximum to bound requests. This text-only slice does not retain unused capability metadata or expose reasoning/tool controls. Do not guess current model names or derive capabilities from an ID. Discovery establishes listing access, not successful inference. [Models contract](https://platform.claude.com/docs/en/api/models/list).
 
 Send stateless user/assistant text history ending in the current user input, optional top-level system instructions and a positive bounded `max_tokens`. Honor a known discovered output maximum. No assistant prefill, tools, attachments or automatic continuation in this slice. [Messages request contract](https://platform.claude.com/docs/en/api/messages/create).
 

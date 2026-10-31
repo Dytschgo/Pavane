@@ -1,16 +1,10 @@
 import { lazy, memo, Suspense } from "react";
-import {
-  AudioLines,
-  Check,
-  Copy,
-  LoaderCircle,
-  Sparkles,
-  SquareTerminal,
-} from "lucide-react";
+import { Check, Copy, LoaderCircle } from "lucide-react";
 import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
 import { useCopyFeedback } from "../lib/use-copy-feedback";
+import { providerPresentation } from "../lib/provider-presentation";
 
 const Markdown = lazy(() =>
   import("./markdown").then((module) => ({ default: module.Markdown })),
@@ -33,7 +27,10 @@ export const ChatMessage = memo(function ChatMessage({
       ? "Codex"
       : message.model?.startsWith("gemini:")
         ? "Gemini"
-        : "Ollama");
+        : message.model?.startsWith("claude:")
+          ? "Claude"
+          : "Ollama");
+  const ProviderIcon = providerPresentation(provider).chatIcon;
   const name =
     model?.name ?? message.model?.split(":").slice(1).join(":") ?? "Assistant";
   const running = message.status === "pending" || message.status === "running";
@@ -49,13 +46,7 @@ export const ChatMessage = memo(function ChatMessage({
           <div
             className={`avatar-assistant provider-${provider.toLowerCase()}`}
           >
-            {provider === "Codex" ? (
-              <SquareTerminal size={15} />
-            ) : provider === "Gemini" ? (
-              <Sparkles size={15} />
-            ) : (
-              <AudioLines size={15} />
-            )}
+            <ProviderIcon size={15} />
           </div>
           <strong>{name}</strong>
           <span className="message-provider">{provider}</span>

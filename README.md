@@ -55,3 +55,5 @@ Expired chats become unreadable at their deadline, are purged at startup and at 
 [Verification](docs/TESTING.md) describes native smoke tests and isolated data. [Design](docs/DESIGN.md), [decisions](docs/decisions/DECISION-LOG.md), and the [current handoff](docs/handoff/CURRENT-HANDOFF.md) record the first-version scope. `pnpm dev` opens an interface-only web build; durable operations require the desktop app.
 
 The source is public. The project owner has deferred choosing a license; no project license is granted by this repository yet. Dependencies retain their own licenses. No T3 Code source was copied.
+
+The [Claude API connection](docs/CLAUDE-API.md) is authored in the current PR with a protected key/workspace identity, discovered models and text streaming. CI and native UI verification are pending; no live account/inference acceptance is claimed.

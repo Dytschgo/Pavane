@@ -3,7 +3,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Cpu,
   Globe2,
   Layers3,
   LoaderCircle,
@@ -11,8 +10,6 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  SquareTerminal,
-  Sparkles,
   Star,
   Zap,
 } from "lucide-react";
@@ -23,6 +20,7 @@ import type { Preferences } from "../lib/model-preferences";
 import { resolveModelOptions } from "../lib/model-options";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
+import { providerPresentation } from "../lib/provider-presentation";
 
 interface Props {
   models: Model[];
@@ -108,9 +106,8 @@ export function ModelPicker({
     { id: "favourites", label: "Favourites", icon: Star },
     ...providerIds.map((id) => ({
       id,
-      label:
-        id === "codex" ? "Codex" : id === "gemini" ? "Gemini API" : "Ollama",
-      icon: id === "codex" ? SquareTerminal : id === "gemini" ? Sparkles : Cpu,
+      label: providerPresentation(id).label,
+      icon: providerPresentation(id).icon,
     })),
   ];
   function favourite(id: string) {
@@ -158,12 +155,7 @@ export function ModelPicker({
     setDetails(null);
     if (!preferences.compare) finishSelection();
   }
-  const TriggerIcon =
-    selected?.provider === "Codex"
-      ? SquareTerminal
-      : selected?.provider === "Gemini"
-        ? Sparkles
-        : Cpu;
+  const TriggerIcon = providerPresentation(selected?.provider ?? "Ollama").icon;
   return (
     <Popover.Root
       open={open}
@@ -396,12 +388,7 @@ export function ModelPicker({
                 </div>
               )}
               {visible.map((model, row) => {
-                const Icon =
-                  model.provider === "Codex"
-                    ? SquareTerminal
-                    : model.provider === "Gemini"
-                      ? Sparkles
-                      : Cpu;
+                const Icon = providerPresentation(model.provider).icon;
                 const chosen = preferences.selected.includes(model.id);
                 const starred = preferences.favourites.includes(model.id);
                 const options = resolveModelOptions(

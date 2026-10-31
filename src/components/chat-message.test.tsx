@@ -39,6 +39,7 @@ it("keeps the Gemini identity when its model disappears from discovery", async (
 
 it.each([
   ["gemini:gemini-test", "Gemini"],
+  ["claude:opaque-model-id", "Claude"],
   ["codex:sol", "Codex"],
   ["ollama:test", "Ollama"],
 ])(

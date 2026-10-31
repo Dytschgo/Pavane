@@ -262,3 +262,28 @@ it("labels and filters Gemini API separately from local models", async () => {
     screen.getByRole("button", { name: "Model: Gemini test. Change model" }),
   ).toBeInTheDocument();
 });
+
+it("filters and selects Claude without exposing unsupported reasoning options", async () => {
+  const user = userEvent.setup();
+  render(
+    <Harness
+      catalog={[
+        ...models,
+        { id: "gemini:gemini-test", name: "Gemini test", provider: "Gemini" },
+        {
+          id: "claude:opaque-model-id",
+          name: "Claude test",
+          provider: "Claude",
+        },
+      ]}
+    />,
+  );
+  await user.click(await screen.findByRole("button", { name: "Claude API" }));
+  await user.type(screen.getByRole("combobox"), "Claude");
+  expect(screen.getAllByRole("option")).toHaveLength(1);
+  expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("option", { name: /Claude test/ }));
+  expect(
+    screen.getByRole("button", { name: "Model: Claude test. Change model" }),
+  ).toBeInTheDocument();
+});

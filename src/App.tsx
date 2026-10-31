@@ -1513,12 +1513,14 @@ export function App() {
             providers={providers}
             busy={connecting}
             onRefresh={() => void connect()}
-            onCredentialsChanged={() => {
+            onCredentialsChanged={(providerId) => {
               setModels((previous) =>
-                previous.filter((model) => model.provider !== "Gemini"),
+                previous.filter(
+                  (model) => model.provider.toLowerCase() !== providerId,
+                ),
               );
               setProviders((previous) =>
-                previous.filter((provider) => provider.id !== "gemini"),
+                previous.filter((provider) => provider.id !== providerId),
               );
               void connect();
             }}

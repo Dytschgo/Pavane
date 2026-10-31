@@ -655,6 +655,65 @@ try {
   checks.push(
     "Gemini API connection masks input, rejects invalid keys and removes only the empty synthetic-profile credential without API calls",
   );
+  const claudeKey = page.getByLabel("Claude API key", { exact: true });
+  const claudeWorkspace = page.getByLabel("Workspace ID (optional)", {
+    exact: true,
+  });
+  const saveConnection = page.getByRole("button", {
+    name: "Save connection",
+    exact: true,
+  });
+  await claudeKey.scrollIntoViewIfNeeded();
+  assert.equal(await claudeKey.getAttribute("type"), "password");
+  assert.equal(await claudeKey.inputValue(), "");
+  assert.equal(await claudeWorkspace.inputValue(), "");
+  assert.equal(await saveConnection.isDisabled(), true);
+  await claudeKey.fill("invalid key");
+  assert.equal(await claudeKey.getAttribute("aria-invalid"), "true");
+  assert.equal(await saveConnection.isDisabled(), true);
+  await claudeKey.fill("synthetic-not-saved-key");
+  await claudeWorkspace.fill("invalid_workspace");
+  assert.equal(await claudeWorkspace.getAttribute("aria-invalid"), "true");
+  assert.equal(await saveConnection.isDisabled(), true);
+  await page
+    .getByText(
+      "Use a Workspace ID starting with wrkspc_ and containing only letters, numbers or underscores.",
+      { exact: true },
+    )
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: join(evidence, "native-claude-validation.png"),
+  });
+  await claudeWorkspace.fill("wrkspc_synthetic");
+  assert.equal(await saveConnection.isEnabled(), true);
+  // Never save this valid-looking synthetic key or make a provider request.
+  // Removal exercises only the fresh profile's absent native connection target.
+  await page
+    .getByRole("button", { name: "Remove connection", exact: true })
+    .click();
+  await page.getByText("Claude connection removed.", { exact: true }).waitFor();
+  await page
+    .getByText("Add a Claude Console API key. API usage and billing apply.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(await claudeKey.inputValue(), "");
+  assert.equal(await claudeWorkspace.inputValue(), "");
+  await page
+    .getByRole("button", { name: "Remove connection", exact: true })
+    .scrollIntoViewIfNeeded();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({
+    path: join(evidence, "native-claude-connection.png"),
+  });
+  checks.push(
+    "Claude API connection masks input, validates workspace/key together and removes only the empty profile connection without provider calls",
+  );
   await page.keyboard.press("Escape");
   assert.equal(await page.getByRole("dialog").count(), 0);
   checks.push(
