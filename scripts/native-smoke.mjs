@@ -234,6 +234,64 @@ try {
     "native IPC, model discovery, UTF-8 streaming, persisted response, Delete Soon",
   );
   await page.screenshot({ path: join(evidence, "native-chat.png") });
+  const reuse = page.getByRole("button", {
+    name: "Add prompt to draft",
+    exact: true,
+  });
+  const reuseRequests = requests.length;
+  await reuse.focus();
+  await page.keyboard.press("Enter");
+  assert.equal(await editor.inputValue(), "Hello from the native smoke test");
+  assert.equal(
+    await editor.evaluate((element) => element === document.activeElement),
+    true,
+  );
+  await editor.fill("My unsent note 🦀");
+  await reuse.click();
+  const reusedDraft = "My unsent note 🦀\n\nHello from the native smoke test";
+  assert.equal(await editor.inputValue(), reusedDraft);
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await editor.waitFor();
+  await page.waitForFunction(
+    (expected) => document.querySelector("#prompt")?.value === expected,
+    reusedDraft,
+  );
+  assert.equal(
+    requests.length,
+    reuseRequests,
+    "Reusing a prompt must never submit it",
+  );
+  const reuseViewport = page.viewportSize();
+  await page.setViewportSize({ width: 720, height: 620 });
+  await reuse.focus();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-prompt-reuse.png") });
+  await page.setViewportSize(reuseViewport);
+  const fullDraft = "界".repeat(21840);
+  await editor.fill(fullDraft);
+  await reuse.click();
+  await page
+    .getByText(
+      "This prompt would exceed the 64 KiB draft limit. Shorten your draft first.",
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(await editor.inputValue(), fullDraft);
+  assert.equal(requests.length, reuseRequests);
+  await page
+    .getByRole("button", { name: "Dismiss error", exact: true })
+    .click();
+  await editor.fill("");
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  checks.push(
+    "keyboard prompt reuse appends without overwriting or sending, survives SQLite reload, and rejects UTF-8 overflow without losing the draft",
+  );
   await page.getByRole("button", { name: /Change model/ }).click();
   await page.getByRole("button", { name: /Compare models/ }).click();
   await page.getByRole("option", { name: /smoke-b/ }).click();

@@ -116,6 +116,64 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each(["", "My unsent note 🦀\nKeep this exactly."])(
+  "adds an earlier prompt to the draft without sending or changing history (%s)",
+  async (existing) => {
+    connectSol();
+    mocked.messages.mockResolvedValue({
+      items: [sentTurn.user],
+      hasMore: false,
+    });
+    mocked.draft.mockResolvedValue(existing);
+    render(<App />);
+    const action = await screen.findByRole("button", {
+      name: "Add prompt to draft",
+    });
+    await screen.findByRole("button", {
+      name: "Model: Sol, Low. Change model",
+    });
+    const editor = screen.getByRole("textbox", {
+      name: "Message",
+    });
+    await waitFor(() => expect(editor).toHaveValue(existing));
+    fireEvent.click(action);
+    const expected = existing ? `${existing}\n\nHello` : "Hello";
+    expect(editor).toHaveValue(expected);
+    expect(editor).toHaveFocus();
+    await waitFor(() =>
+      expect(mocked.saveDraft).toHaveBeenLastCalledWith(first.id, expected),
+    );
+    expect(mocked.send).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Your message")).toHaveTextContent("Hello");
+    expect(
+      screen.getByRole("button", { name: "Model: Sol, Low. Change model" }),
+    ).toBeInTheDocument();
+  },
+);
+
+it("preserves a valid multibyte draft when reusing a prompt would exceed its byte limit", async () => {
+  const existing = "界".repeat(21844); // 65,532 bytes; under the existing limit.
+  mocked.messages.mockResolvedValue({ items: [sentTurn.user], hasMore: false });
+  mocked.draft.mockResolvedValue(existing);
+  render(<App />);
+  const action = await screen.findByRole("button", {
+    name: "Add prompt to draft",
+  });
+  const editor = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue(existing));
+  fireEvent.click(action);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Shorten your draft first.",
+  );
+  expect(editor).toHaveValue(existing);
+  expect(mocked.saveDraft).not.toHaveBeenCalled();
+  expect(mocked.send).not.toHaveBeenCalled();
+  fireEvent.change(editor, { target: { value: "Room now" } });
+  fireEvent.click(action);
+  expect(editor).toHaveValue("Room now\n\nHello");
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
 it("follows deferred content growth without undoing upward reading", async () => {
   mocked.messages.mockResolvedValue({ items: [sentTurn.user], hasMore: false });
   render(<App />);

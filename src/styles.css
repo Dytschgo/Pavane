@@ -683,7 +683,10 @@ p {
   line-height: 1.7;
   color: var(--muted-foreground);
 }
-.copy-message {
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-inline-start: 0;
   margin-block-start: 6px;
 }
@@ -1704,9 +1707,6 @@ p {
 .message-label strong {
   font-size: 13px;
 }
-.message-user .copy-message {
-  justify-self: end;
-}
 .markdown {
   line-height: 1.75;
   font-size: 16px;
@@ -1876,11 +1876,11 @@ p {
   .favourite-toggle.is-favourite:hover {
     color: var(--favourite);
   }
-  .copy-message {
+  .message-actions {
     opacity: 0;
   }
-  .message:hover .copy-message,
-  .message:focus-within .copy-message {
+  .message:hover .message-actions,
+  .message:focus-within .message-actions {
     opacity: 1;
   }
 }

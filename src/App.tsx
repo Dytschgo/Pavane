@@ -74,6 +74,9 @@ const descriptions = {
   bots: "A familiar assistant, with instructions you choose.",
 };
 
+const REUSE_LIMIT_ERROR =
+  "This prompt would exceed the 64 KiB draft limit. Shorten your draft first.";
+
 export function App() {
   const [view, setView] = useState<View>("chat");
   const [sidebar, setSidebar] = useState(true);
@@ -442,15 +445,47 @@ export function App() {
     return () => window.removeEventListener("keydown", key);
   }, [createChat, editingWorkspace]);
 
-  function changeDraft(value: string) {
-    setDraft(value);
-    if (!currentId) return;
-    const chatId = currentId;
-    const version = ++draftVersion.current;
-    draftCache.current.set(chatId, { content: value, version });
-    if (new TextEncoder().encode(value).byteLength <= MAX_DRAFT_BYTES)
-      draftWriter.enqueue({ chatId, content: value, version });
-  }
+  const changeDraft = useCallback(
+    (value: string) => {
+      setDraft(value);
+      if (!currentId) return;
+      const chatId = currentId;
+      const version = ++draftVersion.current;
+      draftCache.current.set(chatId, { content: value, version });
+      if (new TextEncoder().encode(value).byteLength <= MAX_DRAFT_BYTES)
+        draftWriter.enqueue({ chatId, content: value, version });
+    },
+    [currentId, draftWriter],
+  );
+
+  const reusePrompt = useCallback(
+    (message: Message) => {
+      const editor = composer.current;
+      if (
+        !editor ||
+        editor.disabled ||
+        message.chatId !== currentRef.current ||
+        message.role !== "user" ||
+        !message.content
+      )
+        return;
+      // Read the current editor, keeping this callback stable while typing so
+      // memoized replies do not re-render for each draft keystroke.
+      const combined = editor.value
+        ? `${editor.value}\n\n${message.content}`
+        : message.content;
+      if (new TextEncoder().encode(combined).byteLength > MAX_DRAFT_BYTES) {
+        report(REUSE_LIMIT_ERROR);
+        return;
+      }
+      setError((previous) =>
+        previous === REUSE_LIMIT_ERROR ? null : previous,
+      );
+      changeDraft(combined);
+      editor.focus();
+    },
+    [changeDraft, report],
+  );
 
   const connect = useCallback(async () => {
     const version = ++discoverVersion.current;
@@ -1250,6 +1285,8 @@ export function App() {
                         message={message}
                         models={models}
                         onError={report}
+                        onReuse={reusePrompt}
+                        reuseDisabled={loading || busy}
                       />
                     ))}
                   </div>

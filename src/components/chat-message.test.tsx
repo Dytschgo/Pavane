@@ -1,10 +1,60 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import type { Message, Model } from "../lib/types";
 import { ChatMessage } from "./chat-message";
 import { TooltipProvider } from "./ui/tooltip";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+it("offers draft reuse only for a nonempty user prompt and preserves copy", async () => {
+  const onReuse = vi.fn();
+  const user = userEvent.setup();
+  const writeText = vi
+    .spyOn(navigator.clipboard, "writeText")
+    .mockResolvedValue(undefined);
+  const message: Message = { ...reply, role: "user", model: null };
+  const view = (value: Message, disabled = false) => (
+    <TooltipProvider>
+      <ChatMessage
+        message={value}
+        models={[]}
+        onError={vi.fn()}
+        onReuse={onReuse}
+        reuseDisabled={disabled}
+      />
+    </TooltipProvider>
+  );
+  const { rerender } = render(view(message));
+  expect(screen.getByRole("button", { name: "Copy message" })).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Copy message" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(message.content));
+  fireEvent.click(screen.getByRole("button", { name: "Add prompt to draft" }));
+  expect(onReuse).toHaveBeenCalledTimes(1);
+  expect(onReuse).toHaveBeenCalledWith(message);
+  rerender(view(message, true));
+  expect(
+    screen.getByRole("button", { name: "Add prompt to draft" }),
+  ).toBeDisabled();
+  rerender(view(reply));
+  await screen.findByText(reply.content);
+  expect(
+    screen.queryByRole("button", { name: "Add prompt to draft" }),
+  ).toBeNull();
+  rerender(view({ ...message, content: "" }));
+  expect(
+    screen.queryByRole("button", { name: "Add prompt to draft" }),
+  ).toBeNull();
+});
 
 const reply: Message = {
   id: "saved-reply",

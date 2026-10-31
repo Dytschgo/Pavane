@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense } from "react";
-import { Check, Copy, LoaderCircle } from "lucide-react";
+import { Check, Copy, CornerDownLeft, LoaderCircle } from "lucide-react";
 import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
@@ -14,10 +14,14 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   models,
   onError,
+  onReuse,
+  reuseDisabled = false,
 }: {
   message: Message;
   models: Model[];
   onError: (error: unknown) => void;
+  onReuse?: (message: Message) => void;
+  reuseDisabled?: boolean;
 }) {
   const { copied, copy } = useCopyFeedback(message.content, onError);
   const model = models.find((model) => model.id === message.model);
@@ -91,17 +95,31 @@ export const ChatMessage = memo(function ChatMessage({
         </div>
       )}
       {message.content && (
-        <Tip label={copied ? "Copied" : "Copy message"}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="copy-message"
-            aria-label="Copy message"
-            onClick={() => void copy()}
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-          </Button>
-        </Tip>
+        <div className="message-actions">
+          <Tip label={copied ? "Copied" : "Copy message"}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Copy message"
+              onClick={() => void copy()}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </Button>
+          </Tip>
+          {message.role === "user" && onReuse && (
+            <Tip label="Add prompt to draft">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Add prompt to draft"
+                disabled={reuseDisabled}
+                onClick={() => onReuse(message)}
+              >
+                <CornerDownLeft size={14} />
+              </Button>
+            </Tip>
+          )}
+        </div>
       )}
     </article>
   );

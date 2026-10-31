@@ -1,6 +1,6 @@
 # Provider connection audit — 31 October 2026
 
-PV-PROVIDER-002 remains in progress. This audit establishes supported integration candidates and the next implementation boundary. It adds no adapter or connection claim. Codex and Ollama remain the working providers; the latest native-verified executable is still `3eb83fb`. The documentation checkpoint `1163b24` passed CI; its unchanged app/harness needed no duplicate native run.
+PV-PROVIDER-002 remains in progress. The original audit below is historical; Gemini/Claude/xAI API CI and native empty-profile controls are now accepted at0cf7e4f. Real API account/inference and subscription CLI launch qualification remain open. The latest public-only [Claude CLI assessment](CLAUDE-CLI-QUALIFICATION.md) distinguishes bare-mode authentication from managed hook/MCP isolation; it adds no launcher or account claim.
 
 ## Correction after release qualification
 

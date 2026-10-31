@@ -90,3 +90,7 @@ The [xAI API slice](XAI-API.md) is authored, not yet CI/native accepted. New reg
 ## xAI native acceptance
 
 CI 0cf7e4f passed all gates and actual lab passed 18 native/release 2/full checks, including native-xai-validation.png/native-xai-connection.png. Both new captures and all 17 existing captures were inspected. The fixture saves no valid key or calls a provider; live account/inference remains open. [Exact evidence](VERIFICATION.md#xai-api-ci-and-native-controls-accepted--31-october-2026).
+
+## Prompt reuse stage — pending
+
+The next changed native stage adds an earlier synthetic user prompt to an empty draft with keyboard activation, appends to a distinct draft, waits for save completion then reloads and checks exact SQLite restoration. It preserves request count, refuses combined UTF-8 overflow and exports native-prompt-reuse.png in finally. Renderer and native execution await CI/lab; use a new candidate/guard, not the retired0cf7e4f request.
