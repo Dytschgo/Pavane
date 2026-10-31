@@ -186,7 +186,12 @@ test("a long gap before one sample does not inflate its ownership ranking", () =
 });
 
 test("invalid interval diagnostics identify numeric position without exporting input strings", () => {
-  for (const delta of [-1, 300000001, Infinity, "synthetic-private-value"]) {
+  for (const delta of [
+    -300000001,
+    300000001,
+    Infinity,
+    "synthetic-private-value",
+  ]) {
     const data = fixture();
     data.timeDeltas[2] = delta;
     assert.throws(
@@ -203,6 +208,57 @@ test("invalid interval diagnostics identify numeric position without exporting i
         else assert.ok(error.message.endsWith("not a safe integer"));
         return true;
       },
+    );
+  }
+});
+
+test("an observed -28us backward step preserves samples and chronological bounds", () => {
+  const data = fixture();
+  data.timeDeltas = [2000, -28, 3000, 4000];
+  const before = structuredClone(data);
+  const result = summarizeCpuProfile(data);
+  assert.equal(result.sampleCount, 4);
+  assert.equal(result.firstSampleOffsetMs, 1.972);
+  assert.equal(result.lastSampleOffsetMs, 8.972);
+  assert.equal(result.firstRecordedSampleOffsetMs, 2);
+  assert.equal(result.finalRecordedSampleOffsetMs, 8.972);
+  assert.equal(result.unsampledTailMs, 3.028);
+  assert.equal(result.meanSampleSpacingMs, 2.333);
+  assert.equal(result.backwardTimestampSteps, 1);
+  assert.equal(
+    result.exclusiveAssets.reduce((sum, row) => sum + row.samples, 0),
+    4,
+  );
+  assert.equal(
+    result.exclusiveAssets.find((row) => row.asset === "asset:markdown-b.js")
+      .samples,
+    2,
+  );
+  assert.deepEqual(data, before);
+});
+
+test("a final backward step does not move the chronological end or unsampled tail", () => {
+  const data = fixture();
+  data.timeDeltas = [1000, 3000, 2000, -28];
+  const result = summarizeCpuProfile(data);
+  assert.equal(result.lastSampleOffsetMs, 6);
+  assert.equal(result.finalRecordedSampleOffsetMs, 5.972);
+  assert.equal(result.unsampledTailMs, 6);
+  assert.equal(result.meanSampleSpacingMs, 1.667);
+  assert.equal(result.backwardTimestampSteps, 1);
+});
+
+test("backward steps cannot escape the declared capture window", () => {
+  for (const intervals of [
+    [-28, 2000, 3000, 4000],
+    [1000, -1028, 3000, 4000],
+    [1000, 12000, -28, 1000],
+  ]) {
+    const data = fixture();
+    data.timeDeltas = intervals;
+    assert.throws(
+      () => summarizeCpuProfile(data),
+      /sample timestamp outside capture window/,
     );
   }
 });

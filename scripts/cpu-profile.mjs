@@ -125,18 +125,27 @@ export function summarizeCpuProfile(profile) {
     exclusive = new Map(),
     inclusive = new Map(),
     stacks = new Map();
-  let elapsed = 0;
+  let elapsed = 0,
+    earliest = Infinity,
+    latest = 0,
+    backwardTimestampSteps = 0;
   for (let i = 0; i < profile.samples.length; i++) {
     const delta = profile.timeDeltas[i];
     requireValue(
-      Number.isSafeInteger(delta) && delta >= 0 && delta <= 300000000,
+      Number.isSafeInteger(delta) && Math.abs(delta) <= 300000000,
       `invalid sample interval at index ${i}: ${Number.isSafeInteger(delta) ? `integer ${delta}` : "not a safe integer"}`,
     );
+    // CDP intervals describe serialized sample order, which can move backward.
+    // Reconstruct exact offsets instead of clamping/discarding samples. Counts
+    // are order-independent; chronological bounds need min/max like sorting.
     elapsed += delta;
     requireValue(
-      elapsed <= duration,
-      "sample timestamp exceeds capture window",
+      elapsed >= 0 && elapsed <= duration,
+      "sample timestamp outside capture window",
     );
+    earliest = Math.min(earliest, elapsed);
+    latest = Math.max(latest, elapsed);
+    if (delta < 0) backwardTimestampSteps++;
     let id = profile.samples[i];
     requireValue(nodes.has(id), "sample references a missing node");
     const leaf = nodes.get(id).frame;
@@ -166,16 +175,19 @@ export function summarizeCpuProfile(profile) {
       .reverse();
     add(stacks, profile.samples[i], { stack, truncated: path.length > 17 });
   }
-  requireValue(elapsed > 0, "empty sampled time");
+  requireValue(latest > 0, "empty sampled time");
   const total = profile.samples.length;
   return {
     schemaVersion: 1,
     durationMs: ms(duration),
-    firstSampleOffsetMs: ms(profile.timeDeltas[0]),
-    lastSampleOffsetMs: ms(elapsed),
-    unsampledTailMs: ms(duration - elapsed),
+    firstSampleOffsetMs: ms(earliest),
+    lastSampleOffsetMs: ms(latest),
+    firstRecordedSampleOffsetMs: ms(profile.timeDeltas[0]),
+    finalRecordedSampleOffsetMs: ms(elapsed),
+    backwardTimestampSteps,
+    unsampledTailMs: ms(duration - latest),
     meanSampleSpacingMs:
-      total > 1 ? ms((elapsed - profile.timeDeltas[0]) / (total - 1)) : null,
+      total > 1 ? ms((latest - earliest) / (total - 1)) : null,
     sampleCount: profile.samples.length,
     nodeCount: profile.nodes.length,
     exclusiveAssets: ranked(exclusive, 20, total),

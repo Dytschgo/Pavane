@@ -1,6 +1,6 @@
 # Gemini API connection
 
-The direct Gemini API path passed CIb05c69c and its empty-profile connection UI passed native lab15workflows/release2. Overall lab acceptance failed CPU profile validation, and measured typingp95128.2835ms exceeds the unchanged120ms budget. No live key/inference claim; the latest fully accepted executable remains3eb83fb. The credential mutex passed unchanged64cycle stress and two independent source reviews, supporting process-local ordering without proving the Windows root cause. [Exact evidence](VERIFICATION.md#gemini-source-reviewed-native-ui-passed-overall-performance-failed), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
+The direct Gemini API path passed CIb05c69c/00bdeeb and its empty-profile connection UI passed two native15workflow/release2 batches. Both overall lab attempts failed CPU-profile validation; the changed diagnostic identified a negative28microsecond interval at sample2828. A bounded timestamp correction is under CI. The earlier typingp95128.2835ms failure remains unresolved even though the latest diagnostic run met the budget. No full-candidate, live key/inference or latency-improvement claim; latest fully accepted executable remains3eb83fb. [Latest evidence](VERIFICATION.md#cpu-diagnostic-identified-backward-sample--31-october-2026), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
 
 ## User workflow
 
