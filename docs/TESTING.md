@@ -94,3 +94,7 @@ CI 0cf7e4f passed all gates and actual lab passed 18 native/release 2/full check
 ## Prompt reuse stage — pending
 
 The next changed native stage adds an earlier synthetic user prompt to an empty draft with keyboard activation, appends to a distinct draft, waits for save completion then reloads and checks exact SQLite restoration. It preserves request count, refuses combined UTF-8 overflow and exports native-prompt-reuse.png in finally. Renderer and native execution await CI/lab; use a new candidate/guard, not the retired0cf7e4f request.
+
+## Native viewport restore correction
+
+The183108d lab turn failed restoring page.viewportSize(), which is null for this CDP-attached native WebView. Measure actual innerWidth/innerHeight before overriding, as the existing editor stage already does. Close and restore the navigation sidebar for the new narrow reuse capture. Existing assertions and app behavior stay unchanged; corrected CI/new native proof pending. [Failure evidence](VERIFICATION.md#prompt-reuse-native-harness-correction--31-october-2026).

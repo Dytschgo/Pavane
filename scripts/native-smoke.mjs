@@ -262,7 +262,11 @@ try {
     reuseRequests,
     "Reusing a prompt must never submit it",
   );
-  const reuseViewport = page.viewportSize();
+  const reuseViewport = await page.evaluate(() => ({
+    width: innerWidth,
+    height: innerHeight,
+  }));
+  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
   await page.setViewportSize({ width: 720, height: 620 });
   await reuse.focus();
   assert.equal(
@@ -273,6 +277,7 @@ try {
   );
   await page.screenshot({ path: join(evidence, "native-prompt-reuse.png") });
   await page.setViewportSize(reuseViewport);
+  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
   const fullDraft = "界".repeat(21840);
   await editor.fill(fullDraft);
   await reuse.click();

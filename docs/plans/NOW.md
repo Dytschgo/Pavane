@@ -1,6 +1,6 @@
 # Current plan
 
-PV-CHAT-REUSE-001 is working under Sol: [add an earlier prompt to the current draft](../PROMPT-REUSE.md) without copy/paste, overwrite, history changes or implicit inference. Source and meaningful renderer/native regression steps are authored; CI and changed native capture pending.
+PV-CHAT-REUSE-001 is PR under Sol: [reuse action](../PROMPT-REUSE.md). CI183108d passed81 renderer/77 native+12 storage/all gates; native verification failed in the harness restoring a null viewport after keyboard/append/SQLite reload. Correct only dimension measurement and sidebar capture setup; no app/assertion change. Failed evidence retained; correction awaits CI and a new source-bound native turn. [Exact failure/custody](../VERIFICATION.md#prompt-reuse-native-harness-correction--31-october-2026).
 
 PV-XAI-API-001 is PR/verified at 0cf7e4f for synthetic CI/mock/vault/renderer and empty-profile native controls. CI passed 77 renderer/11 files, 15 helpers, 77 native Rust/12 storage/all gates; actual lab 20261031T051834Z-392835f51b42 passed 18 native/release 2/three launches/full checks. Five reports/19 PNGs/two source metadata retained/provenance checked; all 19 captures inspected. Tested unsigned exe/manifest saved without launch in ignored evidence/ci-build-0cf7e4f/. Real Gemini/Claude/xAI key/account/inference remains unverified. [Evidence](../VERIFICATION.md#xai-api-ci-and-native-controls-accepted--31-october-2026), [connection/gaps](../XAI-API.md).
 
