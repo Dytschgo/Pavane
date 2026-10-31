@@ -244,3 +244,23 @@ it("opens supported reasoning options from the keyboard and applies the choice",
     screen.getByRole("button", { name: "Model: Sol, High. Change model" }),
   ).toBeInTheDocument();
 });
+
+it("labels and filters Gemini API separately from local models", async () => {
+  const user = userEvent.setup();
+  render(
+    <Harness
+      catalog={[
+        ...models,
+        { id: "gemini:gemini-test", name: "Gemini test", provider: "Gemini" },
+      ]}
+    />,
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "Gemini API", exact: true }),
+  );
+  expect(screen.getAllByRole("option")).toHaveLength(1);
+  await user.click(screen.getByRole("option", { name: /Gemini test/ }));
+  expect(
+    screen.getByRole("button", { name: "Model: Gemini test. Change model" }),
+  ).toBeInTheDocument();
+});

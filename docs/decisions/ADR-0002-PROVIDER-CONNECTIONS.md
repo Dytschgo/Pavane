@@ -1,6 +1,6 @@
 # ADR-0002 — Prove an isolated provider bridge before exposing it
 
-Status: accepted implementation direction under the ongoing hill climb, 31 October 2026. Adapter delivery remains pending.
+Status: superseded by [ADR-0003](ADR-0003-GEMINI-API.md) after the provider eligibility correction. Retained rationale below is historical, not an instruction to resume the consumer CLI route.
 
 Pavane needs additional model providers while keeping text chat free of autonomous tools and leaving subscription credentials with their owner. The prior provider research did not settle supported interfaces. The current [provider audit](../PROVIDER-CONNECTIONS.md) found official Gemini and Grok ACP surfaces, API-key guidance for third-party Claude applications, and configuration inheritance that an empty client MCP list does not remove.
 

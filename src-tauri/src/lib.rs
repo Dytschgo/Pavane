@@ -1,5 +1,6 @@
 mod codex;
-pub mod gemini;
+mod credentials;
+mod gemini_api;
 mod process_scope;
 pub use process_scope::run_host as run_provider_host;
 mod provider;
@@ -7,7 +8,7 @@ mod provider;
 use pavane_core::{Chat, Message, Run, Store, Workspace};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -29,6 +30,7 @@ struct Runtime {
     slots: Arc<Semaphore>,
     client: reqwest::Client,
     codex: codex::Manager,
+    gemini: gemini_api::Manager,
 }
 
 impl Runtime {
@@ -228,8 +230,11 @@ struct Catalog {
 
 #[tauri::command]
 async fn discover_providers(runtime: State<'_, Arc<Runtime>>) -> Result<Catalog, String> {
-    let (codex, ollama) =
-        tokio::join!(runtime.codex.catalog(), provider::discover(&runtime.client));
+    let (codex, ollama, gemini) = tokio::join!(
+        runtime.codex.catalog(),
+        provider::discover(&runtime.client),
+        runtime.gemini.catalog()
+    );
     let mut models = Vec::new();
     let mut providers = Vec::new();
     match codex {
@@ -264,7 +269,30 @@ async fn discover_providers(runtime: State<'_, Arc<Runtime>>) -> Result<Catalog,
             limits: vec![],
         }),
     }
+    match gemini {
+        Ok((available, status)) => {
+            models.extend(available);
+            providers.push(status);
+        }
+        Err(detail) => providers.push(codex::Status {
+            id: "gemini".into(),
+            name: "Gemini API".into(),
+            state: "unavailable".into(),
+            detail,
+            limits: vec![],
+        }),
+    }
     Ok(Catalog { models, providers })
+}
+
+#[tauri::command]
+async fn save_gemini_key(runtime: State<'_, Arc<Runtime>>, key: String) -> Result<(), String> {
+    runtime.gemini.save_key(key).await
+}
+
+#[tauri::command]
+async fn remove_gemini_key(runtime: State<'_, Arc<Runtime>>) -> Result<(), String> {
+    runtime.gemini.remove_key().await
 }
 
 #[tauri::command]
@@ -277,15 +305,28 @@ async fn send_message(
     on_event: Channel<RunEvent>,
 ) -> Result<TurnStarted, String> {
     let options = options.unwrap_or_default();
+    if models.is_empty() || models.len() > 4 {
+        return Err("Choose one to four models.".into());
+    }
+    let mut gemini_keys: GeminiKeys = HashMap::new();
     if models.iter().any(|model| {
-        !(model.starts_with("ollama:") || model.starts_with("codex:"))
+        !(model.starts_with("ollama:")
+            || model.starts_with("codex:")
+            || model.starts_with("gemini:"))
             || model.split_once(':').is_none_or(|(_, id)| id.is_empty())
-            || model.ends_with(":cloud")
-            || model.ends_with("-cloud")
+            || (!model.starts_with("gemini:")
+                && (model.ends_with(":cloud") || model.ends_with("-cloud")))
     }) {
         return Err("Connect an available provider and choose a model.".into());
     }
     for model in &models {
+        if model.starts_with("gemini:") {
+            let key = runtime
+                .gemini
+                .authorize(model, &options.get(model).cloned().unwrap_or_default())
+                .await?;
+            gemini_keys.entry(model.clone()).or_default().push_back(key);
+        }
         if model.starts_with("codex:") {
             let selected = options.get(model).cloned().unwrap_or_default();
             runtime
@@ -324,7 +365,7 @@ async fn send_message(
     }
     drop(active);
     for (run, token) in runs.iter().cloned().zip(tokens) {
-        let options = options.get(&run.model).cloned().unwrap_or_default();
+        let request = request_for_run(&run, &options, &mut gemini_keys);
         let (runtime, context, instructions, channel) = (
             runtime.clone(),
             context.clone(),
@@ -332,10 +373,29 @@ async fn send_message(
             on_event.clone(),
         );
         tauri::async_runtime::spawn(async move {
-            run_model(runtime, run, context, instructions, token, channel, options).await;
+            run_model(runtime, run, context, instructions, token, channel, request).await;
         });
     }
     Ok(TurnStarted { user, runs })
+}
+
+struct ProviderRequest {
+    options: provider::ModelOptions,
+    gemini_key: Option<credentials::Secret>,
+}
+
+type GeminiKeys = HashMap<String, VecDeque<credentials::Secret>>;
+
+fn request_for_run(
+    run: &Run,
+    options: &HashMap<String, provider::ModelOptions>,
+    keys: &mut GeminiKeys,
+) -> ProviderRequest {
+    ProviderRequest {
+        options: options.get(&run.model).cloned().unwrap_or_default(),
+        // begin_turn permits duplicate models; each accepted occurrence owns a key.
+        gemini_key: keys.get_mut(&run.model).and_then(VecDeque::pop_front),
+    }
 }
 
 async fn run_model(
@@ -345,7 +405,7 @@ async fn run_model(
     instructions: Option<String>,
     token: CancellationToken,
     channel: Channel<RunEvent>,
-    options: provider::ModelOptions,
+    request: ProviderRequest,
 ) {
     let mut output = String::new();
     let mut pending = String::new();
@@ -398,8 +458,21 @@ async fn run_model(
                     model,
                     &context,
                     instructions.as_deref(),
-                    &options,
+                    &request.options,
                     &token,
+                    on_delta,
+                )
+                .await
+        } else if run.model.starts_with("gemini:") {
+            runtime
+                .gemini
+                .stream(
+                    &run.model,
+                    request
+                        .gemini_key
+                        .ok_or("Gemini request has no credential snapshot.")?,
+                    &context,
+                    instructions.as_deref(),
                     on_delta,
                 )
                 .await
@@ -478,6 +551,7 @@ pub fn run() {
                     .connect_timeout(std::time::Duration::from_secs(3))
                     .build()?,
                 codex: codex::Manager::new(database.join("codex-workspace")),
+                gemini: gemini_api::Manager::new(&database),
             });
             runtime.cleanup().map_err(std::io::Error::other)?;
             app.manage(runtime.clone());
@@ -506,6 +580,8 @@ pub fn run() {
             update_workspace,
             discover_models,
             discover_providers,
+            save_gemini_key,
+            remove_gemini_key,
             send_message,
             open_external_url
         ])
@@ -537,5 +613,54 @@ mod link_tests {
         ] {
             assert!(external_url(url).is_err(), "accepted unsafe URL scheme");
         }
+    }
+}
+#[cfg(test)]
+mod credential_queue_tests {
+    use super::*;
+    #[test]
+    fn actual_persisted_runs_receive_their_own_snapshot_including_duplicates() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&directory.path().join("test.sqlite3")).unwrap();
+        let chat = store.create_chat(false, None, 1).unwrap();
+        let models = vec![
+            "gemini:first".into(),
+            "ollama:local".into(),
+            "gemini:first".into(),
+            "gemini:other".into(),
+        ];
+        let (_, runs) = store
+            .begin_turn(&chat.id, "synthetic prompt", &models, 1)
+            .unwrap();
+        let mut keys: GeminiKeys = HashMap::new();
+        keys.insert(
+            "gemini:first".into(),
+            VecDeque::from([
+                credentials::Secret::new("synthetic-first-snapshot".into()).unwrap(),
+                credentials::Secret::new("synthetic-duplicate-snapshot".into()).unwrap(),
+            ]),
+        );
+        keys.insert(
+            "gemini:other".into(),
+            VecDeque::from([credentials::Secret::new("synthetic-other-snapshot".into()).unwrap()]),
+        );
+        let requests: Vec<_> = runs
+            .iter()
+            .map(|run| request_for_run(run, &HashMap::new(), &mut keys))
+            .collect();
+        assert_eq!(
+            requests[0].gemini_key.as_ref().unwrap().as_bytes(),
+            b"synthetic-first-snapshot"
+        );
+        assert!(requests[1].gemini_key.is_none());
+        assert_eq!(
+            requests[2].gemini_key.as_ref().unwrap().as_bytes(),
+            b"synthetic-duplicate-snapshot"
+        );
+        assert_eq!(
+            requests[3].gemini_key.as_ref().unwrap().as_bytes(),
+            b"synthetic-other-snapshot"
+        );
+        assert!(keys.values().all(VecDeque::is_empty));
     }
 }

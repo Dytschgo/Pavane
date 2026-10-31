@@ -1508,6 +1508,15 @@ export function App() {
             providers={providers}
             busy={connecting}
             onRefresh={() => void connect()}
+            onCredentialsChanged={() => {
+              setModels((previous) =>
+                previous.filter((model) => model.provider !== "Gemini"),
+              );
+              setProviders((previous) =>
+                previous.filter((provider) => provider.id !== "gemini"),
+              );
+              void connect();
+            }}
             error={providerError}
           />
           <div className="settings-bottom">

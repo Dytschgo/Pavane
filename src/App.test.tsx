@@ -26,6 +26,8 @@ const mocked = vi.hoisted(() => ({
   createWorkspace: vi.fn(),
   workspace: vi.fn(),
   updateWorkspace: vi.fn(),
+  saveGeminiKey: vi.fn(),
+  removeGeminiKey: vi.fn(),
   send: vi.fn(),
 }));
 let resizeContent: ResizeObserverCallback;
@@ -739,4 +741,61 @@ it("does not leave loading stuck when opening an already-expired sidebar row", a
   await act(async () => {
     rejectRead("Chat expired");
   });
+});
+
+it("removing a Gemini key preserves its selection without falling back to another provider", async () => {
+  const codex = connectSol();
+  mocked.catalog.mockResolvedValue({
+    models: [
+      ...codex.models,
+      { id: "gemini:gemini-test", name: "Gemini test", provider: "Gemini" },
+    ],
+    providers: [],
+  });
+  mocked.removeGeminiKey.mockResolvedValue(undefined);
+  render(<App />);
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Sol, Low. Change model",
+    }),
+  );
+  fireEvent.click(await screen.findByRole("option", { name: /Gemini test/ }));
+  await screen.findByRole("button", {
+    name: "Model: Gemini test. Change model",
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Connections and settings" }),
+  );
+  await screen.findByLabelText("Gemini API key");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeEnabled(),
+  );
+  mocked.catalog.mockResolvedValue(codex);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove key", exact: true }),
+  );
+  await screen.findByText("API key removed.");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Refresh", exact: true }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: "Model: Model unavailable. Change model",
+    }),
+  );
+  expect(
+    await screen.findByRole("option", { name: /Sol/ }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /Gemini test/ }),
+  ).not.toBeInTheDocument();
+  expect(mocked.removeGeminiKey).toHaveBeenCalledTimes(1);
 });

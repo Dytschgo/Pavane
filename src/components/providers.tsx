@@ -4,21 +4,25 @@ import {
   LoaderCircle,
   RefreshCw,
   SquareTerminal,
+  Sparkles,
 } from "lucide-react";
 import type { Model, ProviderStatus } from "../lib/types";
 import { Button } from "./ui/button";
+import { GeminiKeyForm } from "./gemini-key-form";
 
 export function Providers({
   models,
   providers,
   busy,
   onRefresh,
+  onCredentialsChanged,
   error,
 }: {
   models: Model[];
   providers: ProviderStatus[];
   busy: boolean;
   onRefresh: () => void;
+  onCredentialsChanged?: () => void;
   error: string | null;
 }) {
   return (
@@ -48,6 +52,7 @@ export function Providers({
       {[
         { id: "codex", name: "Codex", icon: SquareTerminal },
         { id: "ollama", name: "Ollama", icon: Cpu },
+        { id: "gemini", name: "Gemini API", icon: Sparkles },
       ].map(({ id, name, icon: Icon }) => {
         const status = providers.find((provider) => provider.id === id);
         const connected = status?.state === "connected";
@@ -65,7 +70,9 @@ export function Providers({
                     : (status?.detail ??
                       (id === "codex"
                         ? "Uses your existing Codex CLI subscription login"
-                        : "Local models on this device"))}
+                        : id === "gemini"
+                          ? "Add a Gemini API key"
+                          : "Local models on this device"))}
                 </span>
               </div>
               <span
@@ -129,6 +136,9 @@ export function Providers({
                 keeps your credentials with Codex.
               </p>
             )}
+            {id === "gemini" && (
+              <GeminiKeyForm onChanged={onCredentialsChanged ?? onRefresh} />
+            )}
           </div>
         );
       })}
@@ -142,14 +152,17 @@ export function Providers({
       </div>
       {[
         { name: "Anthropic", mark: "A" },
-        { name: "Google", mark: "G" },
         { name: "xAI", mark: "x" },
       ].map((provider) => (
         <div className="provider-row planned-provider" key={provider.name}>
           <div className="provider-mark">{provider.mark}</div>
           <div className="provider-info">
             <strong>{provider.name}</strong>
-            <span>Subscription adapter planned</span>
+            <span>
+              {provider.name === "Anthropic"
+                ? "API-key connection planned"
+                : "Subscription adapter planned"}
+            </span>
           </div>
           <span className="badge">Planned</span>
         </div>

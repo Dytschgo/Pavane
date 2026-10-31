@@ -1912,3 +1912,27 @@ p {
     outline-color: Highlight;
   }
 }
+.api-key-form {
+  display: grid;
+  gap: 8px;
+  padding-block: 4px 12px;
+}
+.api-key-form label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.api-key-form input {
+  min-block-size: 36px;
+}
+.api-key-form input[aria-invalid="true"] {
+  border-color: var(--destructive-foreground);
+}
+.api-key-form .connection-help,
+.api-key-form .field-error {
+  padding-block: 0;
+}
+.api-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -25,7 +25,9 @@ pnpm desktop:build
 
 The standalone Windows executable is `target/release/pavane.exe`. This foundation has no installer, signing, updater, Pavane account, hosted service, or cloud sync. Provider services have their own accounts and data policies.
 
-For a separate local database, launch `pavane.exe --profile playground`. Normal launch retains your existing data. Profiles share the installed provider login; see [verification and profile boundaries](docs/TESTING.md).
+For a separate local database, launch `pavane.exe --profile playground`. Normal launch retains your existing data. Profiles share CLI-owned logins; the new Gemini API path scopes its key separately to each profile; see [verification and profile boundaries](docs/TESTING.md).
+
+The current PR also authors a [Gemini API connection](docs/GEMINI-API.md) with Windows-protected keys and text streaming. CI/lab acceptance is pending; the last verified test executable predates it. This is an API-key route with separate usage/billing.
 
 ## What works
 

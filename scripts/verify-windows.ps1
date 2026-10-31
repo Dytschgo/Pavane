@@ -105,6 +105,7 @@ try {
     $artifacts += 'cpu-profile-candidate.json'
       $artifacts += 'native-workspace-edit.png'
       $artifacts += 'native-workspace-conflict.png'
+    $artifacts += 'native-gemini-connection.png'
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()
     $collected.Add('verification.json')

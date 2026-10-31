@@ -583,6 +583,44 @@ try {
   await page
     .getByRole("button", { name: "Provider connections", exact: true })
     .click();
+  const apiKey = page.getByLabel("Gemini API key", { exact: true });
+  await page
+    .getByText(
+      "Add a Gemini API key. API usage has separate limits and billing.",
+      { exact: true },
+    )
+    .waitFor();
+  await apiKey.scrollIntoViewIfNeeded();
+  assert.equal(await apiKey.getAttribute("type"), "password");
+  assert.equal(await apiKey.inputValue(), "");
+  const saveKey = page.getByRole("button", { name: "Save key", exact: true });
+  assert.equal(await saveKey.isDisabled(), true);
+  await apiKey.fill("invalid key");
+  assert.equal(await apiKey.getAttribute("aria-invalid"), "true");
+  assert.equal(await saveKey.isDisabled(), true);
+  await apiKey.fill("");
+  // This unique synthetic profile has no key. Exercise idempotent native removal
+  // only; never save a real/synthetic valid key or call Google's API in this run.
+  await page.getByRole("button", { name: "Remove key", exact: true }).click();
+  await page.getByText("API key removed.", { exact: true }).waitFor();
+  await page
+    .getByText(
+      "Add a Gemini API key. API usage has separate limits and billing.",
+      { exact: true },
+    )
+    .waitFor();
+  await page.screenshot({
+    path: join(evidence, "native-gemini-connection.png"),
+  });
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  checks.push(
+    "Gemini API connection masks input, rejects invalid keys and removes only the empty synthetic-profile credential without API calls",
+  );
   await page.keyboard.press("Escape");
   assert.equal(await page.getByRole("dialog").count(), 0);
   checks.push(

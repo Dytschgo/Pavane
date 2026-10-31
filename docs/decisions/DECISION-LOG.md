@@ -1,5 +1,9 @@
 # Decisions
 
+## DEC-0008 — Gemini direct API supersedes the consumer CLI proposal
+
+The dated provider notice invalidated the eligibility assumption in the earlier audit. Select the protected API/key route, retire the unexposed prototype and retain its passing history. No paid development calls or Antigravity substitution. [Current decision](ADR-0003-GEMINI-API.md), [source correction](../PROVIDER-CONNECTIONS.md), [implemented boundary and rollback](../GEMINI-API.md).
+
 ## DEC-0007 — Additional providers require an isolated supported transport
 
 The current provider audit selects Gemini CLI ACP as the first subscription candidate, conditional on proving child-only configuration/tool isolation, cancellation, storage semantics and CLI-owned authentication. Passing an empty MCP list is insufficient in the inspected source. Keep Claude on the protected API-key candidate path unless the provider approves another integration; Grok ACP remains a subsequent candidate. Research is not a working adapter. [Decision and rollback](ADR-0002-PROVIDER-CONNECTIONS.md), [sources and acceptance criteria](../PROVIDER-CONNECTIONS.md).

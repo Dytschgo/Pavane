@@ -49,6 +49,8 @@ export const api = {
   models: () => call<Model[]>("discover_models"),
   openExternal: (url: string) => call<void>("open_external_url", { url }),
   catalog: () => call<Catalog>("discover_providers"),
+  saveGeminiKey: (key: string) => call<void>("save_gemini_key", { key }),
+  removeGeminiKey: () => call<void>("remove_gemini_key"),
   send: (
     chatId: string,
     content: string,

@@ -12,6 +12,7 @@ import {
   Search,
   ShieldCheck,
   SquareTerminal,
+  Sparkles,
   Star,
   Zap,
 } from "lucide-react";
@@ -107,8 +108,9 @@ export function ModelPicker({
     { id: "favourites", label: "Favourites", icon: Star },
     ...providerIds.map((id) => ({
       id,
-      label: id === "codex" ? "Codex" : "Ollama",
-      icon: id === "codex" ? SquareTerminal : Cpu,
+      label:
+        id === "codex" ? "Codex" : id === "gemini" ? "Gemini API" : "Ollama",
+      icon: id === "codex" ? SquareTerminal : id === "gemini" ? Sparkles : Cpu,
     })),
   ];
   function favourite(id: string) {
@@ -156,7 +158,12 @@ export function ModelPicker({
     setDetails(null);
     if (!preferences.compare) finishSelection();
   }
-  const TriggerIcon = selected?.provider === "Codex" ? SquareTerminal : Cpu;
+  const TriggerIcon =
+    selected?.provider === "Codex"
+      ? SquareTerminal
+      : selected?.provider === "Gemini"
+        ? Sparkles
+        : Cpu;
   return (
     <Popover.Root
       open={open}
@@ -389,7 +396,12 @@ export function ModelPicker({
                 </div>
               )}
               {visible.map((model, row) => {
-                const Icon = model.provider === "Codex" ? SquareTerminal : Cpu;
+                const Icon =
+                  model.provider === "Codex"
+                    ? SquareTerminal
+                    : model.provider === "Gemini"
+                      ? Sparkles
+                      : Cpu;
                 const chosen = preferences.selected.includes(model.id);
                 const starred = preferences.favourites.includes(model.id);
                 const options = resolveModelOptions(
