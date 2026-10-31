@@ -3,6 +3,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Cpu,
   Globe2,
   Layers3,
   LoaderCircle,

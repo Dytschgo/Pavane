@@ -1,6 +1,6 @@
 # Claude API connection
 
-The Console-key/workspace adapter is authored under PV-CLAUDE-API-001. Compilation, CI tests and changed native UI acceptance are pending. The tested unsigned app remains the separately accepted 942e87a build. No real Claude credential, CLI authentication, provider call or billed inference was used in development. [Researched contract and official sources](CLAUDE-CONNECTION-PLAN.md).
+The Console-key/workspace adapter is authored under PV-CLAUDE-API-001. Initial CI0e609ad passed formatting/lint and failed TypeScript on the picker empty state’s missing Cpu import. That single import is restored; subsequent checks/tests/build and changed native UI acceptance remain pending. The tested unsigned app remains the separately accepted 942e87a build. No real Claude credential, CLI authentication, provider call or billed inference was used in development. [Researched contract and official sources](CLAUDE-CONNECTION-PLAN.md).
 
 ## User workflow
 
