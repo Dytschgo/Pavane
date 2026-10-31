@@ -184,3 +184,25 @@ test("a long gap before one sample does not inflate its ownership ranking", () =
     0.5,
   );
 });
+
+test("invalid interval diagnostics identify numeric position without exporting input strings", () => {
+  for (const delta of [-1, 300000001, Infinity, "synthetic-private-value"]) {
+    const data = fixture();
+    data.timeDeltas[2] = delta;
+    assert.throws(
+      () => summarizeCpuProfile(data),
+      (error) => {
+        assert.match(
+          error.message,
+          /^CPU profile: invalid sample interval at index 2: /,
+        );
+        assert.ok(!error.message.includes("synthetic-private-value"));
+        assert.ok(error.message.length < 160);
+        if (Number.isSafeInteger(delta))
+          assert.ok(error.message.endsWith(`integer ${delta}`));
+        else assert.ok(error.message.endsWith("not a safe integer"));
+        return true;
+      },
+    );
+  }
+});

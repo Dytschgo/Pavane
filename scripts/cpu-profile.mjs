@@ -130,7 +130,7 @@ export function summarizeCpuProfile(profile) {
     const delta = profile.timeDeltas[i];
     requireValue(
       Number.isSafeInteger(delta) && delta >= 0 && delta <= 300000000,
-      "invalid sample interval",
+      `invalid sample interval at index ${i}: ${Number.isSafeInteger(delta) ? `integer ${delta}` : "not a safe integer"}`,
     );
     elapsed += delta;
     requireValue(

@@ -1,6 +1,6 @@
 # Gemini API connection
 
-The direct Gemini API path passed CI at350b51f; Windows lab acceptance is pending. Stress CI5a49801 reproduced a credential visibility failure after save; a process-wide native credential-call mutex is the next hypothesis under CI, with root cause/fix unproven. It is separate from the retired consumer CLI proposal. The last native-verified executable remains `3eb83fb` and does not include this connection. [Route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
+The direct Gemini API path passed CIb05c69c and its empty-profile connection UI passed native lab15workflows/release2. Overall lab acceptance failed CPU profile validation, and measured typingp95128.2835ms exceeds the unchanged120ms budget. No live key/inference claim; the latest fully accepted executable remains3eb83fb. The credential mutex passed unchanged64cycle stress and two independent source reviews, supporting process-local ordering without proving the Windows root cause. [Exact evidence](VERIFICATION.md#gemini-source-reviewed-native-ui-passed-overall-performance-failed), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
 
 ## User workflow
 

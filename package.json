@@ -15,7 +15,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:native": "cargo test --workspace --locked",
-    "test:verification": "node --test scripts/prebuilt-input.checks.mjs scripts/cpu-profile.checks.mjs",
+    "test:verification": "node --test scripts/prebuilt-input.checks.mjs scripts/cpu-profile.checks.mjs scripts/performance-budget.checks.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {

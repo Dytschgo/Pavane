@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
 import { summarizeCpuProfile } from "./cpu-profile.mjs";
+import { observedBudgetViolations } from "./performance-budget.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const labelIndex = process.argv.indexOf("--label");
@@ -117,7 +118,11 @@ const result = {
 const report = () =>
   writeFile(
     join(evidence, `performance-${label}.json`),
-    JSON.stringify(result, null, 2),
+    JSON.stringify(
+      { ...result, violations: observedBudgetViolations(result) },
+      null,
+      2,
+    ),
   );
 await report();
 let child, browser, launchError, page;
@@ -686,32 +691,8 @@ try {
   result.checks.push(
     "native history loaded across the 100-message page boundary",
   );
-  const violations = [];
-  if (result.stream && result.stream.typingP95Ms > result.budgets.typingP95Ms)
-    violations.push("stream typing p95");
-  if (result.stream && result.stream.typingMaxMs > result.budgets.typingMaxMs)
-    violations.push("stream typing maximum");
-  if (result.stream && result.stream.follow.gapPx > result.budgets.followGapPx)
-    violations.push("stream auto-follow");
-  if (
-    result.reading &&
-    (!result.reading.sameText ||
-      result.reading.addedHeightPx <= 0 ||
-      result.reading.anchorShiftPx > result.budgets.historyAnchorShiftPx)
-  )
-    violations.push("manual reading position during streaming");
-  if (
-    result.reading &&
-    result.reading.resumedGapPx > result.budgets.followGapPx
-  )
-    violations.push("stream follow after returning to latest");
-  if (result.reading && result.reading.growthAfterResumePx <= 0)
-    violations.push("no content growth after resuming follow");
-  if (
-    !result.history.sameText ||
-    result.history.anchorShiftPx > result.budgets.historyAnchorShiftPx
-  )
-    violations.push("history reading anchor");
+  assert.ok(result.history, "History measurement missing");
+  const violations = observedBudgetViolations(result);
   result.violations = violations;
   assert.deepEqual(violations, [], "Responsiveness budget exceeded");
   result.result = "passed";
