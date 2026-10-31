@@ -278,6 +278,13 @@ p {
   align-items: center;
   gap: 6px;
 }
+.list-label > .list-title {
+  display: block;
+  min-inline-size: 0;
+  overflow: clip;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .chat-row {
   display: flex;
   align-items: center;

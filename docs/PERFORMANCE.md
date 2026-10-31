@@ -2,7 +2,7 @@
 
 Current boundary: Dylan explicitly stopped local app tests, builds, benchmarks and UI automation while working on this computer. Source editing/formatting and read-only review can continue. Run new verification through Windows CI and the supported Windows lab. LabManager's maintenance hold has ended.
 
-PV-PERF-005 is rejected: one native pass followed by a typing-budget failure, with no clear layout benefit. App.tsx is restored byte-identical to accepted1804287; rollback CI pending. The earlier memo boundary remains for its measured JavaScript saving and documented layout/typing tradeoffs, not a broad CPU/RAM/latency win. No budgets changed or retry-to-green. [Negative experiment and limits](CPU-PROFILING.md#rejected-rendered-size-experiment--pv-perf-005). Next feature slice is editing saved bot/workspace instructions.
+PV-PERF-005 is rejected: one native pass followed by a typing-budget failure, with no clear layout benefit. App.tsx is restored byte-identical to accepted1804287; rollback cb02da2 passed CI41146597507. The earlier memo boundary remains for its measured JavaScript saving and documented layout/typing tradeoffs, not a broad CPU/RAM/latency win. No budgets changed or retry-to-green. [Negative experiment and limits](CPU-PROFILING.md#rejected-rendered-size-experiment--pv-perf-005). Next feature slice is editing saved bot/workspace instructions.
 
 ## Complete follow/read/resume acceptance — 30 October, 22:00 UTC
 

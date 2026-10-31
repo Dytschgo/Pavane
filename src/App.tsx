@@ -54,6 +54,7 @@ import { Tip, TooltipProvider } from "./components/ui/tooltip";
 import { Modal } from "./components/ui/modal";
 import { ModelPicker } from "./components/model-picker";
 import { Providers } from "./components/providers";
+import { WorkspaceEditor } from "./components/workspace-editor";
 import { ChatMessage } from "./components/chat-message";
 import { useModelPreferences } from "./lib/model-preferences";
 import { resolveModelOptions } from "./lib/model-options";
@@ -105,6 +106,9 @@ export function App() {
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [createKind, setCreateKind] = useState<Workspace["kind"] | null>(null);
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(
+    null,
+  );
   const [workspaceName, setWorkspaceName] = useState("");
   const [instructions, setInstructions] = useState("");
   const [roadmap, setRoadmap] = useState(false);
@@ -126,6 +130,7 @@ export function App() {
     top: number;
   } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const workspaceEditButton = useRef<HTMLButtonElement>(null);
   const nearBottom = useRef(true);
   const showChat = view === "chat" || !!workspaceId;
   const liveMessages = useRef(new Map<string, Message>());
@@ -417,6 +422,7 @@ export function App() {
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
+      if (editingWorkspace) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setSidebar(true);
@@ -434,7 +440,7 @@ export function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [createChat]);
+  }, [createChat, editingWorkspace]);
 
   function changeDraft(value: string) {
     setDraft(value);
@@ -511,7 +517,8 @@ export function App() {
         searching ||
         deleteId ||
         renameId ||
-        createKind
+        createKind ||
+        editingWorkspace
       )
         return;
       if ((event.ctrlKey || event.metaKey) && /^[1-9]$/.test(event.key)) {
@@ -540,6 +547,7 @@ export function App() {
     deleteId,
     renameId,
     createKind,
+    editingWorkspace,
   ]);
 
   async function send(event: FormEvent) {
@@ -986,8 +994,25 @@ export function App() {
                 </div>
               )}
               <div className="list-label">
-                {workspace ? workspace.name : "Recent chats"}
-                <span>{permanent.length || ""}</span>
+                <span className="list-title" title={workspace?.name}>
+                  {workspace ? workspace.name : "Recent chats"}
+                </span>
+                <span>
+                  {permanent.length || ""}
+                  {workspace && (
+                    <Tip label="Edit name and instructions">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Edit name and instructions"
+                        ref={workspaceEditButton}
+                        onClick={() => setEditingWorkspace(workspace)}
+                      >
+                        <Pencil size={13} />
+                      </Button>
+                    </Tip>
+                  )}
+                </span>
               </div>
               {chatRows(permanent)}
               {permanent.length === 0 && (
@@ -1588,6 +1613,28 @@ export function App() {
             </div>
           </form>
         </Modal>
+        {editingWorkspace && (
+          <WorkspaceEditor
+            key={editingWorkspace.id}
+            workspace={editingWorkspace}
+            onUpdate={(saved) =>
+              setWorkspaces((previous) =>
+                previous.map((item) => (item.id === saved.id ? saved : item)),
+              )
+            }
+            onClose={() => {
+              const trigger = workspaceEditButton.current;
+              setEditingWorkspace(null);
+              requestAnimationFrame(() => {
+                if (
+                  trigger?.isConnected &&
+                  document.activeElement === document.body
+                )
+                  trigger.focus();
+              });
+            }}
+          />
+        )}
         <Modal
           open={!!createKind}
           onOpenChange={(open) => {

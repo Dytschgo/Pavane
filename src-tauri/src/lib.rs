@@ -200,6 +200,21 @@ fn create_workspace(
 }
 
 #[tauri::command]
+fn get_workspace(runtime: State<'_, Arc<Runtime>>, id: String) -> Result<Workspace, String> {
+    runtime.with_store(|store| store.workspace(&id))
+}
+
+#[tauri::command]
+fn update_workspace(
+    runtime: State<'_, Arc<Runtime>>,
+    expected: Workspace,
+    name: String,
+    instructions: String,
+) -> Result<Workspace, String> {
+    runtime.with_store(|store| store.update_workspace(&expected, &name, &instructions))
+}
+
+#[tauri::command]
 async fn discover_models(runtime: State<'_, Arc<Runtime>>) -> Result<Vec<provider::Model>, String> {
     provider::discover(&runtime.client).await
 }
@@ -486,6 +501,8 @@ pub fn run() {
             stop_chat,
             list_workspaces,
             create_workspace,
+            get_workspace,
+            update_workspace,
             discover_models,
             discover_providers,
             send_message,

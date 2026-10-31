@@ -103,6 +103,8 @@ try {
     $artifacts += 'performance-candidate-reading.png'
     $artifacts += 'performance-candidate-failure.png'
     $artifacts += 'cpu-profile-candidate.json'
+      $artifacts += 'native-workspace-edit.png'
+      $artifacts += 'native-workspace-conflict.png'
     $exportErrors = [System.Collections.Generic.List[string]]::new()
     $collected = [System.Collections.Generic.List[string]]::new()
     $collected.Add('verification.json')

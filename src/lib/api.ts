@@ -43,6 +43,9 @@ export const api = {
   workspaces: () => call<Workspace[]>("list_workspaces"),
   createWorkspace: (kind: string, name: string, instructions: string) =>
     call<Workspace>("create_workspace", { kind, name, instructions }),
+  workspace: (id: string) => call<Workspace>("get_workspace", { id }),
+  updateWorkspace: (expected: Workspace, name: string, instructions: string) =>
+    call<Workspace>("update_workspace", { expected, name, instructions }),
   models: () => call<Model[]>("discover_models"),
   openExternal: (url: string) => call<void>("open_external_url", { url }),
   catalog: () => call<Catalog>("discover_providers"),

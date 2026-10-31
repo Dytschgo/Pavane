@@ -52,6 +52,19 @@ pub struct Run {
 
 pub struct Store(Connection, Option<std::fs::File>);
 
+fn validate_workspace(kind: &str, name: &str, instructions: &str) -> Result<()> {
+    if !["projects", "spaces", "bots"].contains(&kind)
+        || name.trim().is_empty()
+        || name.chars().count() > 80
+        || instructions.len() > 8192
+    {
+        return Err(
+            "Use a workspace name of up to 80 characters and instructions of up to 8 KiB.".into(),
+        );
+    }
+    Ok(())
+}
+
 fn sql(error: rusqlite::Error) -> String {
     // Do not expose SQL text, file paths or user content through native errors.
     match error {
@@ -459,16 +472,7 @@ impl Store {
         name: &str,
         instructions: &str,
     ) -> Result<Workspace> {
-        if !["projects", "spaces", "bots"].contains(&kind)
-            || name.trim().is_empty()
-            || name.chars().count() > 80
-            || instructions.len() > 8192
-        {
-            return Err(
-                "Use a workspace name of up to 80 characters and instructions of up to 8 KiB."
-                    .into(),
-            );
-        }
+        validate_workspace(kind, name, instructions)?;
         let workspace = Workspace {
             id: Uuid::new_v4().to_string(),
             kind: kind.into(),
@@ -487,6 +491,55 @@ impl Store {
             )
             .map_err(sql)?;
         Ok(workspace)
+    }
+
+    pub fn workspace(&self, id: &str) -> Result<Workspace> {
+        if Uuid::parse_str(id).is_err() {
+            return Err("This workspace no longer exists.".into());
+        }
+        self.0
+            .query_row(
+                "SELECT id,kind,name,instructions FROM workspaces WHERE id=?1",
+                [id],
+                |r| {
+                    Ok(Workspace {
+                        id: r.get(0)?,
+                        kind: r.get(1)?,
+                        name: r.get(2)?,
+                        instructions: r.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(sql)?
+            .ok_or_else(|| "This workspace no longer exists.".into())
+    }
+
+    pub fn update_workspace(
+        &self,
+        expected: &Workspace,
+        name: &str,
+        instructions: &str,
+    ) -> Result<Workspace> {
+        if Uuid::parse_str(&expected.id).is_err() {
+            return Err("This workspace no longer exists.".into());
+        }
+        validate_workspace(&expected.kind, &expected.name, &expected.instructions)?;
+        validate_workspace(&expected.kind, name, instructions)?;
+        let saved = Workspace {
+            id: expected.id.clone(),
+            kind: expected.kind.clone(),
+            name: name.trim().into(),
+            instructions: instructions.into(),
+        };
+        let changed = self.0.execute(
+            "UPDATE workspaces SET name=?1,instructions=?2 WHERE id=?3 AND kind=?4 AND name=?5 AND instructions=?6",
+            params![saved.name, saved.instructions, expected.id, expected.kind, expected.name, expected.instructions],
+        ).map_err(sql)?;
+        if changed != 1 {
+            return Err("This workspace changed or no longer exists. Load the saved version before editing again.".into());
+        }
+        Ok(saved)
     }
 
     pub fn instructions(&self, chat_id: &str) -> Result<Option<String>> {

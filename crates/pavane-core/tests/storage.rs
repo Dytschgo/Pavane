@@ -221,3 +221,143 @@ fn workspace_instructions_are_isolated_and_sql_is_parameterized() {
     assert!(store.messages(&chat_a.id, None, NOW).is_err());
     assert!(store.messages(&chat_b.id, None, NOW).unwrap().is_empty());
 }
+
+#[test]
+fn workspace_edits_survive_reopen_without_replacing_linked_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("workspace.sqlite3");
+    let mut store = Store::open(&path).unwrap();
+    let original = store
+        .create_workspace("bots", "Writer", "Original rules")
+        .unwrap();
+    let other = store
+        .create_workspace("spaces", "Other", "Other rules")
+        .unwrap();
+    let chat = store.create_chat(false, Some(&original.id), NOW).unwrap();
+    let other_chat = store.create_chat(false, Some(&other.id), NOW).unwrap();
+    store.save_draft(&chat.id, "Keep my draft", NOW).unwrap();
+    let (_, runs) = store
+        .begin_turn(&chat.id, "Keep my message", &["m".into()], NOW)
+        .unwrap();
+    store
+        .update_run(&runs[0], "Keep my answer", "complete", NOW)
+        .unwrap();
+    let saved = store
+        .update_workspace(&original, "  Writer revised  ", "New rules; 'quoted' text")
+        .unwrap();
+    assert_eq!(saved.id, original.id);
+    assert_eq!(saved.kind, "bots");
+    assert_eq!(saved.name, "Writer revised");
+    assert_eq!(
+        store.instructions(&other_chat.id).unwrap().unwrap(),
+        "Other rules"
+    );
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(
+        reopened.workspace(&original.id).unwrap().instructions,
+        saved.instructions
+    );
+    assert_eq!(
+        reopened.instructions(&chat.id).unwrap().unwrap(),
+        saved.instructions
+    );
+    assert_eq!(
+        reopened
+            .list_chats(NOW, 0, "")
+            .unwrap()
+            .iter()
+            .find(|c| c.id == chat.id)
+            .unwrap()
+            .workspace_id
+            .as_deref(),
+        Some(original.id.as_str())
+    );
+    assert_eq!(reopened.draft(&chat.id, NOW).unwrap(), "Keep my draft");
+    let messages = reopened.messages(&chat.id, None, NOW).unwrap();
+    assert_eq!(messages[0].content, "Keep my message");
+    assert_eq!(messages[1].content, "Keep my answer");
+}
+
+#[test]
+fn workspace_edit_rejects_stale_missing_or_wrong_kind_snapshots() {
+    let store = Store::memory().unwrap();
+    let original = store
+        .create_workspace("bots", "Writer", "Original")
+        .unwrap();
+    let saved = store
+        .update_workspace(&original, "New name", "New rules")
+        .unwrap();
+    assert!(
+        store
+            .update_workspace(&original, "Lost update", "Overwrite")
+            .is_err()
+    );
+    let mut wrong_kind = saved.clone();
+    wrong_kind.kind = "spaces".into();
+    assert!(
+        store
+            .update_workspace(&wrong_kind, "Moved", "Overwrite")
+            .is_err()
+    );
+    let mut missing = saved.clone();
+    missing.id = uuid::Uuid::new_v4().to_string();
+    assert!(
+        store
+            .update_workspace(&missing, "Missing", "Overwrite")
+            .is_err()
+    );
+    assert!(store.workspace(&missing.id).is_err());
+    missing.id = "'; DROP TABLE workspaces;--".into();
+    assert!(store.workspace(&missing.id).is_err());
+    assert!(
+        store
+            .update_workspace(&missing, "Invalid ID", "Overwrite")
+            .is_err()
+    );
+    assert_eq!(
+        store.workspace(&saved.id).unwrap().instructions,
+        "New rules"
+    );
+    assert_eq!(store.workspaces().unwrap().len(), 1);
+    assert!(
+        store
+            .update_workspace(&saved, &saved.name, &saved.instructions)
+            .is_ok()
+    );
+}
+
+#[test]
+fn workspace_edit_enforces_unicode_name_and_utf8_instruction_limits_atomically() {
+    let store = Store::memory().unwrap();
+    let original = store
+        .create_workspace("projects", "Original", "Original rules")
+        .unwrap();
+    for (name, instructions) in [
+        (" ".to_owned(), "Fine".to_owned()),
+        ("🦀".repeat(81), "Fine".into()),
+        ("Fine".into(), "界".repeat(2731)),
+    ] {
+        assert!(
+            store
+                .update_workspace(&original, &name, &instructions)
+                .is_err()
+        );
+        assert_eq!(store.workspace(&original.id).unwrap().name, "Original");
+        assert_eq!(
+            store.workspace(&original.id).unwrap().instructions,
+            "Original rules"
+        );
+    }
+    let saved = store
+        .update_workspace(&original, &"🦀".repeat(80), &"x".repeat(8192))
+        .unwrap();
+    assert_eq!(saved.name.chars().count(), 80);
+    assert_eq!(saved.instructions.len(), 8192);
+    assert!(
+        store
+            .update_workspace(&saved, "Fine", &"x".repeat(8193))
+            .is_err()
+    );
+    assert_eq!(store.workspace(&saved.id).unwrap().instructions.len(), 8192);
+}

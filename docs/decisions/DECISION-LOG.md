@@ -1,5 +1,11 @@
 # Decisions
 
+## DEC-0006 — Guard saved workspace edits without a migration
+
+PV-CONTEXT-002 uses a parameterized compare-and-swap on the existing workspace fields, retaining ID/kind and linked chats. Reject stale snapshots rather than silently overwriting another edit. Failed saves keep the editor text; explicitly loading the saved version provides recovery without automatic replay. In-flight sends retain their captured instructions; later sends read the saved row. [Scope, verification and rollback](../WORKSPACE-EDITING.md).
+
+Dylan subsequently revoked DEC-0005's sleep-only local testing permission while working on this PC. Current app tests/builds/UI run only in CI or the supported Windows lab; source editing/formatting and evidence inspection remain local.
+
 ## DEC-0001 — Desktop direction replaces the retired SaaS
 
 Accepted by Dylan on 29 October 2026: a public-source, Windows-first Rust desktop app unifying Chat, Projects, Spaces, Bots, Images and Videos. SQLite holds local conversations. The supplied sketch and shadcn/ui define the UI direction. This supersedes all historical web/tenant/hosting plans; no existing hosting resources are modified. Licensing is explicitly deferred by Dylan.

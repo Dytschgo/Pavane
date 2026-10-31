@@ -2,7 +2,7 @@
 
 `PV-PERF-003` has two actual baseline captures at0bc99e4. `PV-PERF-004` passed CI and two equivalent native observations at1804287. The inner memo boundary reduces JavaScript work on this workload, with higher layout work and typing p95; overall task ranges overlap. No broad CPU/latency/RAM improvement is established.
 
-The later PV-PERF-005 follow-measurement experiment is rejected after its repeat typing-budget failure and inconclusive layout result. App source is restored to1804287; rollback CI pending. The negative result below remains evidence, not acceptance.
+The later PV-PERF-005 follow-measurement experiment is rejected after its repeat typing-budget failure and inconclusive layout result. App source is restored to1804287; rollback cb02da2 passed CI41146597507. The negative result below remains evidence, not acceptance.
 
 ## Baseline and memoization results
 
@@ -39,7 +39,7 @@ The two1804287 captures above supplied the baseline. CI41144684424/job1243669111
 
 The repeat exceeds the unchanged120ms typing budget; it is not a successful acceptance despite complete profiling and successful scrolling/retention. Layout overlaps the2.582026–2.697753s baseline. The first result alone cannot authorize a performance claim. Browser156.0.4314.50/guest Node22.23.3/pnpm11.25.0/workload hash/sampler/warmup are unchanged; build Node moved24.22.1→24.22.2, while Rust remains1.99.1. Slight reading timings also differ. These observations do not isolate a cause for the latency failure or remaining layout work.
 
-Reject the experiment and restore App.tsx byte-identical to1804287. Its no-premature-measurement test described only the rejected optimization contract and is removed with it; retain the separate user-behavior regression for initial following on a new send from an unpinned conversation. Original scroll/history/security/retention checks and budgets remain. Rollback CI is pending; accepted unsigned user-test build remains1804287. Do not retry this candidate to obtain a green sample or claim its new executable is accepted. [Exact provenance and disposal](VERIFICATION.md#rendered-size-experiment-rejected--30-october-2026). Next work is the saved bot/workspace editor in TASKS.md, rather than extending this performance experiment.
+Reject the experiment and restore App.tsx byte-identical to1804287. Its no-premature-measurement test described only the rejected optimization contract and is removed with it; retain the separate user-behavior regression for initial following on a new send from an unpinned conversation. Original scroll/history/security/retention checks and budgets remain. Rollback cb02da2 passed CI41146597507; accepted unsigned user-test build remains1804287. Do not retry this candidate to obtain a green sample or claim its new executable is accepted. [Exact provenance and disposal](VERIFICATION.md#rendered-size-experiment-rejected--30-october-2026). Next work is the saved bot/workspace editor in TASKS.md, rather than extending this performance experiment.
 
 ## Capture
 

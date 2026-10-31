@@ -24,6 +24,8 @@ const mocked = vi.hoisted(() => ({
   delete: vi.fn(),
   stop: vi.fn(),
   createWorkspace: vi.fn(),
+  workspace: vi.fn(),
+  updateWorkspace: vi.fn(),
   send: vi.fn(),
 }));
 let resizeContent: ResizeObserverCallback;
@@ -338,6 +340,46 @@ it("waits for startup discovery without losing the draft, then sends the default
     ),
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it("edits the active workspace without creating a chat or changing the current message", async () => {
+  const workspace = {
+    id: "bot",
+    kind: "bots",
+    name: "Writer",
+    instructions: "Old rules",
+  };
+  const saved = { ...workspace, name: "Revised", instructions: "New rules" };
+  mocked.listChats.mockResolvedValue([{ ...first, workspaceId: workspace.id }]);
+  mocked.workspaces.mockResolvedValue([workspace]);
+  mocked.messages.mockResolvedValue({ items: [sentTurn.user], hasMore: false });
+  mocked.updateWorkspace.mockResolvedValue(saved);
+  render(<App />);
+  await screen.findByText("Hello");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Edit name and instructions" }),
+  );
+  const name = screen.getByRole("textbox", { name: "Name" });
+  expect(name).toHaveValue("Writer");
+  fireEvent.change(name, { target: { value: "Revised" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /Instructions/ }), {
+    target: { value: "New rules" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(mocked.updateWorkspace).toHaveBeenCalledWith(
+    workspace,
+    "Revised",
+    "New rules",
+  );
+  expect(screen.getByText("Hello")).toBeInTheDocument();
+  expect(mocked.createChat).not.toHaveBeenCalled();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Edit name and instructions" }),
+  );
+  expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Revised");
 });
 
 it("reuses a pristine current chat instead of accumulating empty conversations", async () => {

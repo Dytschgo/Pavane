@@ -328,6 +328,189 @@ try {
     content: "Use short sentences.",
   });
   checks.push("bot instructions reach the real native provider request");
+  const savedWorkspace = await page.evaluate(async () => {
+    const workspaces = await window.__TAURI_INTERNALS__.invoke(
+      "list_workspaces",
+      {},
+    );
+    return workspaces.find((item) => item.name === "Concise writer");
+  });
+  assert.ok(savedWorkspace, "The created bot must exist in native SQLite");
+  const linkedChats = await page.evaluate(async (id) => {
+    const chats = await window.__TAURI_INTERNALS__.invoke("list_chats", {
+      offset: 0,
+      search: "",
+    });
+    return chats
+      .filter((chat) => chat.workspaceId === id)
+      .map((chat) => chat.id)
+      .sort();
+  }, savedWorkspace.id);
+  await page
+    .getByRole("button", { name: "Edit name and instructions", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("Discard this edit");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      document.activeElement?.getAttribute("aria-label") ===
+      "Edit name and instructions",
+  );
+  await page
+    .getByRole("button", { name: "Edit name and instructions", exact: true })
+    .click();
+  assert.equal(
+    await page.getByRole("textbox", { name: "Name", exact: true }).inputValue(),
+    "Concise writer",
+  );
+  const editedInstructions = page.getByRole("textbox", {
+    name: /Instructions/,
+  });
+  const oversizedRules = "界".repeat(2731);
+  await editedInstructions.fill(oversizedRules);
+  await page.getByRole("alert").filter({ hasText: "8 KiB" }).waitFor();
+  assert.equal(await editedInstructions.inputValue(), oversizedRules);
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await editedInstructions.fill("My unsaved rules");
+  await page
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("My unsaved name");
+  // A second native client changes the exact synthetic row after this editor
+  // opened. The stale UI save must not overwrite that acknowledged revision.
+  await page.evaluate(
+    async (expected) =>
+      window.__TAURI_INTERNALS__.invoke("update_workspace", {
+        expected,
+        name: "Saved elsewhere",
+        instructions: "Other saved rules",
+      }),
+    savedWorkspace,
+  );
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "changed or no longer exists" })
+    .waitFor();
+  assert.equal(await editedInstructions.inputValue(), "My unsaved rules");
+  assert.equal(
+    await page.getByRole("textbox", { name: "Name", exact: true }).inputValue(),
+    "My unsaved name",
+  );
+  assert.equal(
+    (
+      await page.evaluate(
+        async (id) =>
+          window.__TAURI_INTERNALS__.invoke("get_workspace", { id }),
+        savedWorkspace.id,
+      )
+    ).instructions,
+    "Other saved rules",
+  );
+  await page.screenshot({
+    path: join(evidence, "native-workspace-conflict.png"),
+  });
+  await page
+    .getByRole("button", { name: "Load saved version", exact: true })
+    .click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#edit-workspace-name")?.value ===
+      "Saved elsewhere",
+  );
+  assert.equal(await editedInstructions.inputValue(), "Other saved rules");
+  checks.push(
+    "stale workspace edit is rejected without losing the draft; explicit reload recovers native saved state",
+  );
+  await page
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("Revised writer");
+  await editedInstructions.fill("Use numbered steps.");
+  const editorViewport = await page.evaluate(() => ({
+    width: innerWidth,
+    height: innerHeight,
+  }));
+  await page.setViewportSize({ width: 720, height: 620 });
+  await page
+    .getByRole("button", { name: "Save changes", exact: true })
+    .scrollIntoViewIfNeeded();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-workspace-edit.png") });
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Edit bot", exact: true })
+    .waitFor({ state: "hidden" });
+  await page.setViewportSize(editorViewport);
+  const afterEdit = await page.evaluate(
+    async (id) => ({
+      workspace: await window.__TAURI_INTERNALS__.invoke("get_workspace", {
+        id,
+      }),
+      chats: (
+        await window.__TAURI_INTERNALS__.invoke("list_chats", {
+          offset: 0,
+          search: "",
+        })
+      )
+        .filter((chat) => chat.workspaceId === id)
+        .map((chat) => chat.id)
+        .sort(),
+    }),
+    savedWorkspace.id,
+  );
+  assert.equal(afterEdit.workspace.name, "Revised writer");
+  assert.equal(afterEdit.workspace.kind, savedWorkspace.kind);
+  assert.deepEqual(afterEdit.chats, linkedChats);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Edit name and instructions", exact: true })
+    .click();
+  assert.equal(
+    await page.getByRole("textbox", { name: "Name", exact: true }).inputValue(),
+    "Revised writer",
+  );
+  assert.equal(
+    await page.getByRole("textbox", { name: /Instructions/ }).inputValue(),
+    "Use numbered steps.",
+  );
+  await page.keyboard.press("Escape");
+  await page
+    .locator(".message-user")
+    .getByText("A workspace question", { exact: true })
+    .waitFor();
+  const requestsBeforeEditSend = requests.length;
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
+    .fill("Updated workspace question");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor({ state: "hidden" });
+  assert.equal(requests.length, requestsBeforeEditSend + 2);
+  for (const request of requests.slice(requestsBeforeEditSend)) {
+    assert.deepEqual(request.messages[0], {
+      role: "system",
+      content: "Use numbered steps.",
+    });
+    assert.equal(request.messages.at(-1).content, "Updated workspace question");
+  }
+  checks.push(
+    "edited bot name/instructions survive native reload, preserve linked chats and reach the next actual provider request",
+  );
   for (const name of ["Projects", "Spaces", "Images", "Videos"]) {
     await page.getByRole("button", { name, exact: true }).click();
     await page
@@ -423,6 +606,11 @@ try {
   );
   await page
     .getByText("Grüezi 🦀. A persisted response from smoke-a.", { exact: true })
+    .last()
+    .waitFor();
+  await page
+    .locator(".message-user")
+    .getByText("Updated workspace question", { exact: true })
     .waitFor();
   checks.push("full native process restart restores SQLite draft and messages");
   await writeFile(
