@@ -255,9 +255,7 @@ it("labels and filters Gemini API separately from local models", async () => {
       ]}
     />,
   );
-  await user.click(
-    await screen.findByRole("button", { name: "Gemini API", exact: true }),
-  );
+  await user.click(await screen.findByRole("button", { name: "Gemini API" }));
   expect(screen.getAllByRole("option")).toHaveLength(1);
   await user.click(screen.getByRole("option", { name: /Gemini test/ }));
   expect(

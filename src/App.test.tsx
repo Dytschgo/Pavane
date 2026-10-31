@@ -768,19 +768,13 @@ it("removing a Gemini key preserves its selection without falling back to anothe
   );
   await screen.findByLabelText("Gemini API key");
   await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Refresh", exact: true }),
-    ).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
   );
   mocked.catalog.mockResolvedValue(codex);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Remove key", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Remove key" }));
   await screen.findByText("API key removed.");
   await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Refresh", exact: true }),
-    ).toBeEnabled(),
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
