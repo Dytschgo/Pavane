@@ -1,5 +1,9 @@
 # Decisions
 
+## DEC-0007 — Additional providers require an isolated supported transport
+
+The current provider audit selects Gemini CLI ACP as the first subscription candidate, conditional on proving child-only configuration/tool isolation, cancellation, storage semantics and CLI-owned authentication. Passing an empty MCP list is insufficient in the inspected source. Keep Claude on the protected API-key candidate path unless the provider approves another integration; Grok ACP remains a subsequent candidate. Research is not a working adapter. [Decision and rollback](ADR-0002-PROVIDER-CONNECTIONS.md), [sources and acceptance criteria](../PROVIDER-CONNECTIONS.md).
+
 ## DEC-0006 — Guard saved workspace edits without a migration
 
 PV-CONTEXT-002 uses a parameterized compare-and-swap on the existing workspace fields, retaining ID/kind and linked chats. Reject stale snapshots rather than silently overwriting another edit. Failed saves keep the editor text; explicitly loading the saved version provides recovery without automatic replay. In-flight sends retain their captured instructions; later sends read the saved row. [Scope, verification and rollback](../WORKSPACE-EDITING.md).

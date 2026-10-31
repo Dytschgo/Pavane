@@ -1,5 +1,7 @@
 # Research basis — 29 October 2026
 
+Historical initial research follows. Codex has since been implemented and independently exercised; see [verification](VERIFICATION.md). The [31 October provider audit](PROVIDER-CONNECTIONS.md) supersedes the unresolved Claude/Gemini/Grok interface findings below with current official documentation and pinned source inspection. Additional adapters remain unimplemented.
+
 Two Luna (`gpt-6-luna`, medium effort) research tasks ran in parallel, read-only. The coordinator inspected their reports and the implementation sources. No T3 code was copied, and research did not make provider calls or read auth files.
 
 ## T3 patterns
