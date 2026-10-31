@@ -309,6 +309,27 @@ mod tests {
         }
 
         #[test]
+        fn overlapping_read_buffers_and_their_drops_preserve_the_saved_credential() {
+            let fixture = Fixture::new();
+            let reopened = Vault::new(fixture.directory.path()).unwrap();
+            let expected = b"fake-overlapping-read-key";
+            fixture
+                .vault
+                .write(Secret::new(String::from_utf8(expected.to_vec()).unwrap()).unwrap())
+                .unwrap();
+            let held = fixture.vault.read().unwrap().unwrap();
+            for _ in 0..32 {
+                let other = reopened.read().unwrap().unwrap();
+                assert!(other.as_bytes() == expected);
+                drop(other);
+                assert!(held.as_bytes() == expected);
+                assert_key(&fixture.vault, expected);
+            }
+            drop(held);
+            assert_key(&reopened, expected);
+        }
+
+        #[test]
         fn rejected_input_preserves_value_and_replacement_and_delete_work() {
             let fixture = Fixture::new();
             fixture

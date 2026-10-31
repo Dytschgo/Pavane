@@ -91,6 +91,16 @@ impl Manager {
             .as_ref()
             .is_none_or(|current| current.as_bytes() != key.as_bytes())
         {
+            // Temporary CI probe: classification only, never credential bytes or hashes.
+            #[cfg(test)]
+            eprintln!(
+                "[DEBUG-gemini-vault-001] catalog recheck: {}",
+                if current.is_none() {
+                    "missing"
+                } else {
+                    "different"
+                }
+            );
             state.models.clear();
             state.key = None;
             return Err("Gemini API key changed. Refresh model access.".into());

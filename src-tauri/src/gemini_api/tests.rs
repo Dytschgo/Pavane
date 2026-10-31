@@ -484,7 +484,23 @@ mod managed_tests {
         let (origin, worker) = serve(vec![Reply::json(model_list())]);
         let api = manager(&profile, origin);
         api.save_key(KEY.into()).await.unwrap();
-        let (models, _) = api.catalog().await.unwrap();
+        assert!(
+            profile
+                .vault
+                .read()
+                .unwrap()
+                .is_some_and(|key| key.as_bytes() == KEY.as_bytes()),
+            "saved synthetic credential must be visible before discovery"
+        );
+        let (models, _) = api.catalog().await.unwrap_or_else(|error| {
+            let current = profile.vault.read().unwrap();
+            let classification = match current.as_ref() {
+                None => "missing",
+                Some(key) if key.as_bytes() == KEY.as_bytes() => "expected",
+                Some(_) => "different",
+            };
+            panic!("{error}; independent synthetic vault reread: {classification}");
+        });
         api.authorize(&models[0].id, &ModelOptions::default())
             .await
             .unwrap();
