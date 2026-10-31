@@ -11,6 +11,7 @@ export function Modal({
   children,
   wide = false,
   dismissible = true,
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,6 +20,7 @@ export function Modal({
   children: ReactNode;
   wide?: boolean;
   dismissible?: boolean;
+  returnFocus?: () => HTMLElement | null;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -26,6 +28,13 @@ export function Modal({
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content
           className={`dialog ${wide ? "dialog-wide" : ""}`}
+          onCloseAutoFocus={(event) => {
+            const target = returnFocus?.();
+            if (target?.isConnected) {
+              event.preventDefault();
+              target.focus();
+            }
+          }}
           onEscapeKeyDown={(event) => {
             if (!dismissible) event.preventDefault();
           }}

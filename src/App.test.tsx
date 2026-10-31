@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import userEvent from "@testing-library/user-event";
 import type { Catalog, Chat, RunEvent, TurnStarted } from "./lib/types";
 
 const mocked = vi.hoisted(() => ({
@@ -88,6 +89,18 @@ function connectSol() {
   };
   mocked.catalog.mockResolvedValue(catalog);
   return catalog;
+}
+
+async function openNavigation() {
+  fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+  await screen.findByRole("dialog", { name: "Chats", exact: true });
+}
+async function openConnections() {
+  await openNavigation();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Connections", exact: true }),
+  );
+  await screen.findByRole("dialog", { name: "Your connections" });
 }
 
 beforeEach(() => {
@@ -517,6 +530,8 @@ it("does not steal search focus when a pending send finishes", async () => {
   fireEvent.change(input, { target: { value: "Hello" } });
   fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
   await waitFor(() => expect(mocked.send).toHaveBeenCalledTimes(1));
+  await openNavigation();
+
   fireEvent.click(screen.getByRole("button", { name: "Search chats" }));
   const search = await screen.findByRole("textbox", {
     name: "Search chat titles",
@@ -614,6 +629,8 @@ it("identifies the originating chat when its response fails after navigation", a
   fireEvent.change(input, { target: { value: "Hello" } });
   fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
   await screen.findByRole("button", { name: "Stop responses" });
+  await openNavigation();
+
   fireEvent.click(
     screen.getByRole("button", { name: "Open chat Second conversation" }),
   );
@@ -686,10 +703,14 @@ describe("durable draft interaction", () => {
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
     expect(mocked.send).not.toHaveBeenCalled();
+    await openNavigation();
+
     fireEvent.click(
       screen.getByRole("button", { name: "Open chat Second conversation" }),
     );
     await waitFor(() => expect(input).toHaveValue(""));
+    await openNavigation();
+
     fireEvent.click(
       screen.getByRole("button", { name: "Open chat First conversation" }),
     );
@@ -733,12 +754,16 @@ describe("durable draft interaction", () => {
     await waitFor(() => expect(input).toBeEnabled());
     fireEvent.change(input, { target: { value: "Do not lose this thought" } });
     await screen.findByText("Draft not saved");
+    await openNavigation();
+
     fireEvent.click(
       screen.getByRole("button", {
         name: "Open chat Second conversation",
       }),
     );
     await waitFor(() => expect(input).toHaveValue(""));
+    await openNavigation();
+
     fireEvent.click(
       screen.getByRole("button", {
         name: "Open chat First conversation",
@@ -836,6 +861,8 @@ it("expires selected content even when title search removes its sidebar row", as
   });
   render(<App />);
   await screen.findByText("Temporary private text");
+  await openNavigation();
+
   fireEvent.click(screen.getByRole("button", { name: "Search chats" }));
   fireEvent.change(
     screen.getByRole("textbox", { name: "Search chat titles" }),
@@ -869,6 +896,8 @@ it("does not leave loading stuck when opening an already-expired sidebar row", a
   render(<App />);
   const input = await screen.findByRole("textbox", { name: "Message" });
   await waitFor(() => expect(input).toBeEnabled());
+  await openNavigation();
+
   fireEvent.click(
     screen.getByRole("button", { name: "Open chat Second conversation" }),
   );
@@ -903,7 +932,7 @@ it("removing a Gemini key preserves its selection without falling back to anothe
   await screen.findByRole("button", {
     name: "Model: Gemini test. Change model",
   });
-  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await openConnections();
   fireEvent.click(screen.getByRole("button", { name: "Manage Gemini API" }));
   await screen.findByLabelText("Gemini API key");
   await waitFor(() =>
@@ -964,7 +993,7 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   await screen.findByRole("button", {
     name: "Model: Claude test. Change model",
   });
-  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await openConnections();
   fireEvent.click(screen.getByRole("button", { name: "Manage Claude API" }));
   await screen.findByLabelText("Claude API key");
   await waitFor(() =>
@@ -1061,7 +1090,7 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
   await screen.findByRole("button", {
     name: "Model: xAI test. Change model",
   });
-  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await openConnections();
   fireEvent.click(screen.getByRole("button", { name: "Manage xAI API" }));
   await screen.findByLabelText("xAI API key");
   await waitFor(() =>
@@ -1177,18 +1206,24 @@ it("rechecks a failed connection without clearing the draft or sending a message
   render(<App />);
   const editor = await screen.findByRole("textbox", { name: "Message" });
   await waitFor(() => expect(editor).toHaveValue("Keep this note"));
-  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await openConnections();
   await screen.findByText(/Couldn’t check connections/);
   connectSol();
   fireEvent.click(screen.getByRole("button", { name: "Recheck connections" }));
   await screen.findByText("1 model ready");
   expect(screen.queryByText(/Couldn’t check connections/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Open navigation" }),
+    ).toHaveFocus(),
+  );
   expect(editor).toHaveValue("Keep this note");
   expect(mocked.send).not.toHaveBeenCalled();
   expect(
     screen.queryByRole("button", { name: "Provider connections" }),
   ).toBeNull();
+  await openNavigation();
   expect(screen.getAllByRole("button", { name: "Connections" })).toHaveLength(
     1,
   );
@@ -1249,4 +1284,71 @@ it("opens connection recovery for an unavailable retry model without switching p
     "Keep this unsent draft",
   );
   expect(await screen.findByText("Retained partial")).toBeInTheDocument();
+});
+
+it("opens a keyboard-contained navigation drawer and returns focus without clearing the draft", async () => {
+  const user = userEvent.setup();
+  mocked.draft.mockResolvedValue("Keep my place 🦀");
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Keep my place 🦀"));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.querySelector(".rail")).toBeNull();
+  expect(document.querySelector(".composer-footer")).toBeNull();
+  const trigger = screen.getByRole("button", { name: "Open navigation" });
+  await user.click(trigger);
+  const drawer = screen.getByRole("dialog", { name: "Chats", exact: true });
+  await user.tab();
+  expect(drawer).toContainElement(document.activeElement as HTMLElement);
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(trigger).toHaveFocus();
+  expect(editor).toHaveValue("Keep my place 🦀");
+  expect(mocked.send).not.toHaveBeenCalled();
+});
+
+it("opens search directly with Ctrl+K and lists temporary chats once", async () => {
+  mocked.listChats.mockResolvedValue([
+    { ...first, expiresAt: Date.now() + 86_400_000 },
+    second,
+  ]);
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  const search = await screen.findByRole("textbox", {
+    name: "Search chat titles",
+  });
+  await waitFor(() => expect(search).toHaveFocus());
+  expect(
+    screen.getAllByRole("button", { name: "Open chat First conversation" }),
+  ).toHaveLength(1);
+  expect(screen.getByLabelText("Deletes in 1 day")).toBeInTheDocument();
+  expect(screen.queryByText("Deleting soon")).toBeNull();
+});
+
+it("discloses temporary expiry before creation and keeps the new draft path reachable", async () => {
+  const user = userEvent.setup();
+  const temporaryChat = { ...second, expiresAt: Date.now() + 30 * 86_400_000 };
+  mocked.createChat.mockImplementation(async () => {
+    mocked.listChats.mockResolvedValue([temporaryChat, first]);
+    return temporaryChat;
+  });
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  await openNavigation();
+  await user.click(screen.getByRole("button", { name: "Create chat" }));
+  const temporary = await screen.findByRole("menuitem", {
+    name: /Temporary chat.*Deleted after 30 days/,
+  });
+  await user.click(temporary);
+  await waitFor(() =>
+    expect(mocked.createChat).toHaveBeenCalledWith(true, null),
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(
+    await screen.findByRole("button", { name: "Keep this chat" }),
+  ).toBeInTheDocument();
+  expect(mocked.send).not.toHaveBeenCalled();
 });

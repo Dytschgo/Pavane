@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openConnections } from "./navigation.mjs";
 import { spawn, execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -182,7 +183,7 @@ try {
   checks.push(
     "real GPT-6.1-Sol streamed through native IPC into Markdown, list and code block",
   );
-  await page.getByRole("button", { name: "Connections", exact: true }).click();
+  await openConnections(page);
   await page
     .getByText("Connected through your Codex CLI login", { exact: true })
     .waitFor();

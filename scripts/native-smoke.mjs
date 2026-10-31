@@ -8,6 +8,11 @@ import { resolve, join } from "node:path";
 import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
 import { randomUUID } from "node:crypto";
+import {
+  openNavigation,
+  closeNavigation,
+  openConnections,
+} from "./navigation.mjs";
 
 // Drives the actual Windows WebView, never a browser storage imitation.
 // Run only with no Ollama service on 11434; a bind error leaves it untouched.
@@ -78,7 +83,13 @@ const mock = createServer(async (request, response) => {
   }
   const chunks = last.includes("STOP_TEST")
     ? Array(300).fill("still thinking ")
-    : ["Grüezi 🦀. ", "A persisted response ", `from ${payload.model}.`];
+    : last === "Plan a relaxed weekend in Lisbon."
+      ? [
+          "Saturday: wander Alfama, then find a café by the river. ",
+          "Sunday: pastries in Belém and a slow walk through the city. ",
+          "Leave the evenings open.",
+        ]
+      : ["Grüezi 🦀. ", "A persisted response ", `from ${payload.model}.`];
   let index = 0;
   const timer = setInterval(() => {
     if (index < chunks.length) {
@@ -178,8 +189,12 @@ try {
     .getByRole("option", { name: /smoke-a/ })
     .waitFor({ timeout: 45000 });
   await page.getByRole("option", { name: /smoke-a/ }).click();
-  await page.getByRole("button", { name: "Delete Soon", exact: false }).click();
-  await page.getByText(/^Deletes in \d+ days\.$/).waitFor();
+  await openNavigation(page);
+  await page.getByRole("button", { name: "Create chat", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: /Temporary chat.*Deleted after 30 days/ })
+    .click();
+  await page.getByText(/^Temporary · \d+ days?$/).waitFor();
   const oversized = "界".repeat(30000);
   const editor = page.getByRole("textbox", { name: "Message", exact: true });
   await editor.fill(oversized);
@@ -288,7 +303,7 @@ try {
     width: innerWidth,
     height: innerHeight,
   }));
-  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
+  await closeNavigation(page);
   await page.setViewportSize({ width: 720, height: 620 });
   await reuse.focus();
   assert.equal(
@@ -299,7 +314,7 @@ try {
   );
   await page.screenshot({ path: join(evidence, "native-prompt-reuse.png") });
   await page.setViewportSize(reuseViewport);
-  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
+  await openNavigation(page);
   const renameRequests = requests.length;
   await page.locator(".chat-row.selected .row-menu").click();
   await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
@@ -322,7 +337,9 @@ try {
   await renameDialog
     .getByRole("button", { name: "Cancel", exact: true })
     .click();
+  await closeNavigation(page);
   assert.equal(await editor.inputValue(), reusedDraft);
+  await openNavigation(page);
   await page.locator(".chat-row.selected .row-menu").click();
   await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
   assert.equal(
@@ -336,9 +353,11 @@ try {
     .getByRole("button", { name: "Open chat Renamed Grüezi 🦀", exact: true })
     .waitFor();
   await page.reload();
+  await openNavigation(page);
   await page
     .getByRole("button", { name: "Open chat Renamed Grüezi 🦀", exact: true })
     .waitFor();
+  await closeNavigation(page);
   await page.waitForFunction(
     (expected) => document.querySelector("#prompt")?.value === expected,
     reusedDraft,
@@ -449,7 +468,7 @@ try {
     width: innerWidth,
     height: innerHeight,
   }));
-  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
+  await closeNavigation(page);
   await page.setViewportSize({ width: 720, height: 620 });
   await siblingReply
     .getByRole("button", { name: "Stop this response", exact: true })
@@ -462,7 +481,6 @@ try {
   );
   await page.screenshot({ path: join(evidence, "native-response-stop.png") });
   await page.setViewportSize(selectiveViewport);
-  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
   await page.getByText("Saved on this device", { exact: true }).waitFor();
   await page.reload();
   await siblingReply
@@ -609,7 +627,7 @@ try {
   await page
     .getByRole("button", { name: "Keep this chat", exact: true })
     .click();
-  await page.getByText(/^Deletes in \d+ days\.$/).waitFor({ state: "hidden" });
+  await page.getByText(/^Temporary · \d+ days?$/).waitFor({ state: "hidden" });
   checks.push("convert Delete Soon to a permanent chat");
   await page.getByRole("button", { name: /Change model/ }).click();
   await page.getByRole("button", { name: /Compare models/ }).click();
@@ -681,12 +699,14 @@ try {
     await page.getByRole("button", { name: "Try again", exact: true }).count(),
     0,
   );
+  await openNavigation(page);
   assert.equal(
     await page
       .getByRole("button", { name: "Connections", exact: true })
       .count(),
     1,
   );
+  await closeNavigation(page);
   assert.equal(
     await page
       .getByRole("button", { name: "Provider connections", exact: true })
@@ -703,6 +723,7 @@ try {
     "failed response retries its original model/prompt once after reload, retains the failed partial and unsent draft without a duplicate user message, and persists the successful new attempt",
   );
 
+  await openNavigation(page);
   await page.getByRole("button", { name: "Bots", exact: true }).click();
   await page.getByRole("button", { name: "New bot", exact: true }).click();
   await page
@@ -909,6 +930,7 @@ try {
     "edited bot name/instructions survive native reload, preserve linked chats and reach the next actual provider request",
   );
   for (const name of ["Projects", "Spaces"]) {
+    await openNavigation(page);
     await page.getByRole("button", { name, exact: true }).click();
     await page.getByRole("heading", { name, exact: true }).waitFor();
     const kind = name === "Projects" ? "project" : "space";
@@ -930,6 +952,7 @@ try {
     await page.getByRole("button", { name: "Videos", exact: true }).count(),
     0,
   );
+  await openNavigation(page);
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   await page.screenshot({ path: join(evidence, "native-final.png") });
   assert.deepEqual(diagnostics, []);
@@ -947,7 +970,7 @@ try {
     })
     .waitFor();
   await page.getByRole("button", { name: "Close search", exact: true }).click();
-  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
+  await closeNavigation(page);
   await page.setViewportSize({ width: 720, height: 620 });
   assert.equal(
     await page.evaluate(
@@ -987,7 +1010,7 @@ try {
   );
   await narrowPrompt.fill(previousDraft);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.getByRole("button", { name: "Connections", exact: true }).click();
+  await openConnections(page);
   const connectionRequests = requests.length;
   await page
     .getByRole("button", { name: "Recheck connections", exact: true })
@@ -1167,7 +1190,6 @@ try {
     "keyboard search, narrow WebView layout, reduced-motion modal dismissal",
   );
   await page.setViewportSize({ width: 1360, height: 900 });
-  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("Draft survives process restart");
@@ -1191,6 +1213,103 @@ try {
     .getByText("Updated workspace question", { exact: true })
     .waitFor();
   checks.push("full native process restart restores SQLite draft and messages");
+  await openNavigation(page);
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await page.getByRole("button", { name: /Change model/ }).click();
+  const compare = page.getByRole("button", { name: /Compare models/ });
+  if ((await compare.getAttribute("aria-pressed")) === "true")
+    await compare.click();
+  await page.getByRole("option", { name: /smoke-a/ }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
+    .fill("Plan a relaxed weekend in Lisbon.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await page
+    .getByText(/Leave the evenings open/)
+    .last()
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor({ state: "hidden" });
+  await openNavigation(page);
+  await page.locator(".chat-row.selected .row-menu").click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Title", exact: true })
+    .fill("Weekend in Lisbon");
+  await page.getByRole("button", { name: "Save title", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Rename chat", exact: true })
+    .waitFor({ state: "hidden" });
+  await closeNavigation(page);
+  assert.equal(await page.locator(".rail").count(), 0);
+  assert.equal(await page.locator(".composer-footer").count(), 0);
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  const modelPosition = await page.evaluate(() => {
+    const model = document
+      .querySelector(".model-trigger")
+      .getBoundingClientRect();
+    const send = document
+      .querySelector(".composer button[type=submit]")
+      .getBoundingClientRect();
+    return model.right < send.left;
+  });
+  assert.equal(
+    modelPosition,
+    true,
+    "Model choice stays left of the send action",
+  );
+  await page.screenshot({ path: join(evidence, "native-open-canvas.png") });
+  const demoRequests = requests.length;
+  await page.keyboard.press("Control+k");
+  const drawer = page.getByRole("dialog", { name: "Chats", exact: true });
+  await drawer.waitFor();
+  assert.equal(
+    await page
+      .getByRole("textbox", { name: "Search chat titles", exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await page.keyboard.press("Tab");
+  assert.equal(
+    await drawer.evaluate((el) => el.contains(document.activeElement)),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-navigation.png") });
+  await page.keyboard.press("Escape");
+  await drawer.waitFor({ state: "hidden" });
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Open navigation", exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await page.setViewportSize({ width: 480, height: 820 });
+  await openNavigation(page);
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({
+    path: join(evidence, "native-navigation-narrow.png"),
+  });
+  await closeNavigation(page);
+  await page.screenshot({
+    path: join(evidence, "native-open-canvas-narrow.png"),
+  });
+  await page.setViewportSize({ width: 1360, height: 900 });
+  assert.equal(
+    requests.length,
+    demoRequests,
+    "Navigation never sends a message",
+  );
+  checks.push(
+    "Open Canvas has no persistent navigation/footer, keeps model choice at left, and preserves keyboard search/focus containment/dismissal at desktop and 480px",
+  );
+
   await writeFile(
     join(evidence, "native-smoke.json"),
     JSON.stringify(

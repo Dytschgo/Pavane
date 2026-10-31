@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { FormEvent } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowUp,
   Bot,
@@ -20,13 +21,12 @@ import {
   LoaderCircle,
   MessageCircle,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Menu as MenuIcon,
+  SquarePen,
   Pencil,
   Plus,
   Search,
   Settings2,
-  Sparkles,
   Square,
   Trash2,
   X,
@@ -67,12 +67,17 @@ const descriptions = {
   bots: "A familiar assistant, with instructions you choose.",
 };
 
+function expiryText(deadline: number) {
+  const days = daysRemaining(deadline);
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
 const REUSE_LIMIT_ERROR =
   "This prompt would make your draft too long. Shorten your draft first.";
 
 export function App() {
   const [view, setView] = useState<View>("chat");
-  const [sidebar, setSidebar] = useState(true);
+  const [sidebar, setSidebar] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -130,6 +135,13 @@ export function App() {
   } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const workspaceEditButton = useRef<HTMLButtonElement>(null);
+  const navigationTrigger = useRef<HTMLButtonElement>(null);
+  const chatSearch = useRef<HTMLInputElement>(null);
+  const drawerFocus = useRef<"trigger" | "composer">("trigger");
+  const sidebarOpen = useRef(sidebar);
+  useLayoutEffect(() => {
+    sidebarOpen.current = sidebar;
+  }, [sidebar]);
   const nearBottom = useRef(true);
   const showChat = view === "chat" || !!workspaceId;
   const liveMessages = useRef(new Map<string, Message>());
@@ -225,7 +237,21 @@ export function App() {
       } catch (failure) {
         if (selection.current === version) report(failure);
       } finally {
-        if (selection.current === version) setLoading(false);
+        if (selection.current === version) {
+          setLoading(false);
+          requestAnimationFrame(() => {
+            if (drawerFocus.current === "composer" && !sidebarOpen.current) {
+              const active = document.activeElement;
+              if (
+                active === document.body ||
+                active === navigationTrigger.current ||
+                active === composer.current
+              )
+                composer.current?.focus();
+              drawerFocus.current = "trigger";
+            }
+          });
+        }
       }
     },
     [draftWriter, report],
@@ -430,11 +456,19 @@ export function App() {
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (editingWorkspace) return;
+      if (
+        editingWorkspace ||
+        settings ||
+        renameId ||
+        deleteId ||
+        createKind ||
+        pickerOpen
+      )
+        return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setSidebar(true);
-        setSearching((value) => !value);
+        setSearching(true);
       }
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -443,12 +477,21 @@ export function App() {
       ) {
         event.preventDefault();
         setView("chat");
+        setSidebar(false);
         void createChat();
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [createChat, editingWorkspace]);
+  }, [
+    createChat,
+    editingWorkspace,
+    settings,
+    renameId,
+    deleteId,
+    createKind,
+    pickerOpen,
+  ]);
 
   const changeDraft = useCallback(
     (value: string) => {
@@ -849,6 +892,7 @@ export function App() {
   function navigate(next: View) {
     setView(next);
     setWorkspaceId(null);
+    setSidebar(false);
   }
 
   async function keepChat(id: string) {
@@ -883,8 +927,6 @@ export function App() {
       (!workspaceId || chat.workspaceId === workspaceId) &&
       chat.title.toLowerCase().includes(query.toLowerCase()),
   );
-  const permanent = visibleChats.filter((chat) => !chat.expiresAt);
-  const temporary = visibleChats.filter((chat) => chat.expiresAt);
   const viewInfo = views.find((item) => item.id === view)!;
 
   const retryable = new Set<string>();
@@ -909,13 +951,17 @@ export function App() {
           aria-label={`Open chat ${chat.title}`}
           onClick={() => {
             if (view !== "chat" && !workspaceId) setView("chat");
+            drawerFocus.current = "composer";
+            setSidebar(false);
             void openChat(chat);
           }}
         >
-          <MessageCircle size={15} />
+          {chat.expiresAt ? <Clock3 size={15} /> : <MessageCircle size={15} />}
           <span>{chat.title}</span>
-          {chat.expiresAt && chat.id !== currentId && (
-            <small>{daysRemaining(chat.expiresAt)}d</small>
+          {chat.expiresAt && (
+            <small aria-label={`Deletes in ${expiryText(chat.expiresAt)}`}>
+              {daysRemaining(chat.expiresAt)}d
+            </small>
           )}
         </button>
         <Menu.Root>
@@ -959,497 +1005,502 @@ export function App() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="app-shell" data-sidebar={sidebar}>
-        <nav className="rail" aria-label="Workflows">
-          <div className="wordmark" aria-label="Pavane">
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <path d="M9 25V7h8a6 6 0 0 1 0 12h-4" />
-              <path d="M13 25V11h4a2 2 0 0 1 0 4h-4" />
-            </svg>
-          </div>
-          <div className="rail-nav">
-            {views.map(({ id, label, icon: Icon }) => (
-              <Tip key={id} label={label}>
-                <button
-                  className={`rail-button ${view === id ? "active" : ""}`}
-                  aria-label={label}
-                  aria-current={view === id ? "page" : undefined}
-                  onClick={() => navigate(id)}
-                >
-                  <Icon size={21} strokeWidth={1.6} />
-                </button>
-              </Tip>
-            ))}
-          </div>
-          <Tip label="Connections">
-            <button
-              className="rail-button rail-settings"
-              aria-label="Connections"
-              onClick={() => setSettings(true)}
+        <Dialog.Root open={sidebar} onOpenChange={setSidebar}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="navigation-overlay" />
+            <Dialog.Content
+              className="sidebar navigation-drawer"
+              aria-describedby={undefined}
+              onOpenAutoFocus={(event) => {
+                if (searching) {
+                  event.preventDefault();
+                  chatSearch.current?.focus();
+                }
+              }}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                if (settings || renameId || deleteId || editingWorkspace)
+                  return;
+                const target =
+                  drawerFocus.current === "composer" && showChat
+                    ? composer.current
+                    : navigationTrigger.current;
+                if (!target?.hasAttribute("disabled")) {
+                  drawerFocus.current = "trigger";
+                  target?.focus();
+                }
+              }}
             >
-              <Settings2 size={20} strokeWidth={1.6} />
-            </button>
-          </Tip>
-          <div className="profile" title="Local profile">
-            D
-          </div>
-        </nav>
-        {sidebar && (
-          <aside className="sidebar" aria-label="Conversation sidebar">
-            <div className="sidebar-heading">
-              <span>
-                Pavane<span className="alpha-tag">alpha</span>
-              </span>
-              <div className="inline-actions">
-                <Tip label="Search chats · Ctrl+K">
+              <div className="sidebar-heading">
+                <Dialog.Title>Chats</Dialog.Title>
+                <div className="inline-actions">
+                  <Tip label="Search chats · Ctrl+K">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Search chats"
+                      onClick={() => setSearching((value) => !value)}
+                    >
+                      <Search size={17} />
+                    </Button>
+                  </Tip>
+                  <Dialog.Close asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Close navigation"
+                    >
+                      <X size={18} />
+                    </Button>
+                  </Dialog.Close>
+                </div>
+              </div>
+              {searching && (
+                <div className="sidebar-search">
+                  <Search size={15} />
+                  <input
+                    ref={chatSearch}
+                    autoFocus
+                    placeholder="Search chats…"
+                    aria-label="Search chat titles"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Search chats"
-                    onClick={() => setSearching((value) => !value)}
+                    aria-label="Close search"
+                    onClick={() => {
+                      setSearching(false);
+                      setQuery("");
+                    }}
                   >
-                    <Search size={17} />
+                    <X size={14} />
                   </Button>
-                </Tip>
-                <Tip label="Hide sidebar">
+                </div>
+              )}
+              <div className="sidebar-actions">
+                <Menu.Root>
+                  <Menu.Trigger asChild>
+                    <Button
+                      variant="secondary"
+                      aria-label="Create chat"
+                      disabled={busy}
+                    >
+                      <Plus size={16} />
+                      New chat
+                      <ChevronDown size={14} />
+                    </Button>
+                  </Menu.Trigger>
+                  <Menu.Portal>
+                    <Menu.Content className="context-menu" align="start">
+                      <Menu.Item
+                        className="menu-item"
+                        onSelect={() => {
+                          if (!showChat) setView("chat");
+                          drawerFocus.current = "composer";
+                          setSidebar(false);
+                          void createChat();
+                        }}
+                      >
+                        <Plus size={15} />
+                        New chat
+                      </Menu.Item>
+                      <Menu.Item
+                        className="menu-item"
+                        onSelect={() => {
+                          if (!showChat) setView("chat");
+                          drawerFocus.current = "composer";
+                          setSidebar(false);
+                          void createChat(true);
+                        }}
+                      >
+                        <Clock3 size={15} />
+                        <span>
+                          Temporary chat<small>Deleted after 30 days</small>
+                        </span>
+                      </Menu.Item>
+                    </Menu.Content>
+                  </Menu.Portal>
+                </Menu.Root>
+              </div>
+              <nav className="drawer-workflows" aria-label="Workflows">
+                {views.map(({ id, label, icon: Icon }) => (
                   <Button
+                    key={id}
                     variant="ghost"
-                    size="icon"
-                    aria-label="Hide sidebar"
-                    onClick={() => setSidebar(false)}
+                    aria-current={view === id ? "page" : undefined}
+                    onClick={() => navigate(id)}
                   >
-                    <PanelLeftClose size={17} />
+                    <Icon size={17} />
+                    {label}
                   </Button>
-                </Tip>
-              </div>
-            </div>
-            {searching && (
-              <div className="sidebar-search">
-                <Search size={15} />
-                <input
-                  autoFocus
-                  placeholder="Search chat titles…"
-                  aria-label="Search chat titles"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Close search"
-                  onClick={() => {
-                    setSearching(false);
-                    setQuery("");
-                  }}
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-            )}
-            <div className="sidebar-actions">
-              <Button
-                variant="primary"
-                aria-label="New chat"
-                onClick={() => {
-                  if (!showChat) setView("chat");
-                  void createChat();
-                }}
-                disabled={busy}
-              >
-                <Plus size={16} />
-                New chat<kbd>Ctrl ⇧ O</kbd>
-              </Button>
-              <Tip label="Saved for 30 days, then removed from this device">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (!showChat) setView("chat");
-                    void createChat(true);
-                  }}
-                  disabled={busy}
-                >
-                  <Clock3 size={16} />
-                  Delete Soon<small>30 days</small>
-                </Button>
-              </Tip>
-            </div>
-            <div className="sidebar-scroll">
-              {workspace && (
-                <button
-                  className="workspace-back"
-                  onClick={() => setWorkspaceId(null)}
-                >
-                  <ChevronLeft size={14} />
-                  {viewInfo.label}
-                </button>
-              )}
-              {view !== "chat" && !workspaceId && (
-                <div className="sidebar-workspace-title">
-                  <viewInfo.icon size={17} />
-                  <span>{viewInfo.label}</span>
-                </div>
-              )}
-              <div className="list-label">
-                <span className="list-title" title={workspace?.name}>
-                  {workspace ? workspace.name : "Recent chats"}
-                </span>
-                <span>
-                  {permanent.length || ""}
-                  {workspace && (
-                    <Tip label="Edit name and instructions">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Edit name and instructions"
-                        ref={workspaceEditButton}
-                        onClick={() => setEditingWorkspace(workspace)}
-                      >
-                        <Pencil size={13} />
-                      </Button>
-                    </Tip>
-                  )}
-                </span>
-              </div>
-              {chatRows(permanent)}
-              {permanent.length === 0 && (
-                <p className="sidebar-empty">
-                  {query
-                    ? "No matching chats"
-                    : "Your conversations start here."}
-                </p>
-              )}
-              {hasMoreChats && (
-                <Button
-                  variant="ghost"
-                  size="small"
-                  className="more-chats"
-                  onClick={() => void moreChats()}
-                >
-                  More chats
-                  <ChevronDown size={13} />
-                </Button>
-              )}
-              {temporary.length > 0 && (
-                <div className="temporary-list">
-                  <div className="list-label">
-                    <span>
-                      <Clock3 size={12} />
-                      Deleting soon
-                    </span>
-                    <span>{temporary.length}</span>
-                  </div>
-                  {chatRows(temporary)}
-                </div>
-              )}
-            </div>
-          </aside>
-        )}
-        <main className="main-pane">
-          <header className="main-header">
-            <div className="header-location">
-              {!sidebar && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Show sidebar"
-                  onClick={() => setSidebar(true)}
-                >
-                  <PanelLeftOpen size={17} />
-                </Button>
-              )}
-              <span>
-                {showChat ? (workspace?.name ?? "Chat") : viewInfo.label}
-              </span>
-              {showChat && (
-                <>
-                  <span className="breadcrumb-divider">/</span>
-                  <span className="header-title">
-                    {current?.title ?? "New chat"}
-                  </span>
-                </>
-              )}
-            </div>
-          </header>
-          {!native && (
-            <div className="preview-notice">
-              Interface preview · Open the desktop app for SQLite storage and
-              model connections.
-            </div>
-          )}
-          {error && (
-            <div className="error-banner" role="alert">
-              <span>{error}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Dismiss error"
-                onClick={() => setError(null)}
-              >
-                <X size={16} />
-              </Button>
-            </div>
-          )}
-          {showChat ? (
-            <>
-              <div
-                ref={conversation}
-                className={`conversation ${messages.length ? "has-messages" : ""}`}
-                onWheel={(event) => {
-                  if (event.ctrlKey || event.shiftKey || event.defaultPrevented)
-                    return;
-                  const area = event.currentTarget;
-                  if (
-                    !(event.target instanceof Element) ||
-                    !area.contains(event.target)
-                  )
-                    return;
-                  // Leave gestures in independently scrolling content alone.
-                  for (
-                    let node: Element | null = event.target;
-                    node && node !== area;
-                    node = node.parentElement
-                  ) {
-                    if (
-                      node.clientHeight > 0 &&
-                      node.scrollHeight > node.clientHeight + 1 &&
-                      ["auto", "scroll"].includes(
-                        getComputedStyle(node).overflowY,
-                      )
-                    )
-                      return;
-                  }
-                  if (event.deltaY < 0) nearBottom.current = false;
-                  else if (
-                    event.deltaY > 0 &&
-                    event.deltaMode === 0 &&
-                    event.deltaY >=
-                      area.scrollHeight - area.scrollTop - area.clientHeight
-                  )
-                    // Capture intent before deferred growth changes the bottom
-                    // between native wheel scrolling and its scroll event.
-                    nearBottom.current = true;
-                }}
-                onScroll={(event) => {
-                  const el = event.currentTarget;
-                  const atLatest =
-                    el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                  // Growing content can emit scroll events without an upward
-                  // move. That must not turn a pinned reader into an unpinned one.
-                  if (el.scrollTop < lastScrollTop.current - 1 || atLatest)
-                    nearBottom.current = atLatest;
-                  lastScrollTop.current = el.scrollTop;
-                }}
-                aria-label="Conversation"
-              >
-                {loading ? (
-                  <div className="loading-state" role="status">
-                    <LoaderCircle className="spin" size={22} />
-                    <span>Opening your chat…</span>
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="welcome">
-                    <h1>What’s on your mind?</h1>
-                    <div className="suggestion-row">
-                      {[
-                        {
-                          icon: Sparkles,
-                          text: "Explore an idea",
-                          prompt:
-                            "Help me explore an idea. Ask me one question at a time.",
-                        },
-                        {
-                          icon: Pencil,
-                          text: "Write something",
-                          prompt:
-                            "Help me write something. Start by asking what I am working on.",
-                        },
-                        {
-                          icon: Layers3,
-                          text: "See another angle",
-                          prompt:
-                            "Help me look at a decision from different perspectives. Ask me about the decision first.",
-                        },
-                      ].map(({ icon: Icon, text, prompt }) => (
-                        <button
-                          key={text}
-                          disabled={native && !currentId}
-                          onClick={() => {
-                            changeDraft(prompt);
-                            composer.current?.focus();
-                          }}
-                        >
-                          <Icon size={14} />
-                          {text}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="message-list" ref={messageList}>
-                    {moreHistory && (
-                      <Button
-                        variant="ghost"
-                        size="small"
-                        onClick={() => void older()}
-                        disabled={loadingHistory}
-                      >
-                        {loadingHistory ? (
-                          <LoaderCircle className="spin" size={14} />
-                        ) : (
-                          <ArrowUp size={14} />
-                        )}
-                        Load earlier messages
-                      </Button>
-                    )}
-                    {messages.map((message) => (
-                      <ChatMessage
-                        key={message.id}
-                        message={message}
-                        models={models}
-                        onError={report}
-                        onReuse={reusePrompt}
-                        onStop={stopResponse}
-                        onRetry={
-                          retryable.has(message.id) ? retryResponse : undefined
-                        }
-                        retryDisabled={loading || busy || running}
-                        reuseDisabled={loading || busy}
-                      />
-                    ))}
-                  </div>
+                ))}
+              </nav>
+              <div className="sidebar-scroll">
+                {workspace && (
+                  <button
+                    className="workspace-back"
+                    onClick={() => setWorkspaceId(null)}
+                  >
+                    <ChevronLeft size={14} />
+                    {viewInfo.label}
+                  </button>
                 )}
-              </div>
-              <div className="composer-region">
-                {currentId &&
-                  draftFailures.has(currentId) &&
-                  !saving &&
-                  !draftTooLong && (
-                    <p className="composer-error" role="alert">
-                      Couldn’t save this draft. Your text is still here. Choose
-                      Retry save.
-                    </p>
-                  )}
-                {draftTooLong && (
-                  <p className="composer-error" id="draft-limit" role="alert">
-                    This message is too long to save or send. Shorten it first.
-                    Your text is still here.
+                <div className="list-label">
+                  <span className="list-title" title={workspace?.name}>
+                    {workspace ? workspace.name : "Recent chats"}
+                  </span>
+                </div>
+                {chatRows(visibleChats)}
+                {visibleChats.length === 0 && (
+                  <p className="sidebar-empty">
+                    {query ? "No matching chats" : "No chats yet"}
                   </p>
                 )}
-                {current?.expiresAt && (
+                {hasMoreChats && (
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    className="more-chats"
+                    onClick={() => void moreChats()}
+                  >
+                    More chats
+                    <ChevronDown size={13} />
+                  </Button>
+                )}
+              </div>
+              <Button
+                className="drawer-connections"
+                variant="ghost"
+                onClick={() => {
+                  setSidebar(false);
+                  setSettings(true);
+                }}
+              >
+                <Settings2 size={17} />
+                Connections
+              </Button>
+            </Dialog.Content>
+          </Dialog.Portal>
+          <main
+            className="main-pane"
+            data-empty={showChat && !loading && messages.length === 0}
+          >
+            <header className="main-header">
+              <Dialog.Trigger asChild>
+                <Button
+                  ref={navigationTrigger}
+                  className="navigation-trigger"
+                  variant="ghost"
+                  aria-label="Open navigation"
+                >
+                  <MenuIcon size={19} />
+                  <span>Chats</span>
+                </Button>
+              </Dialog.Trigger>
+              <div className="header-location">
+                <span className="header-title">
+                  {showChat ? (current?.title ?? "New chat") : viewInfo.label}
+                </span>
+                {workspace && (
+                  <Tip label="Edit name and instructions">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Edit name and instructions"
+                      ref={workspaceEditButton}
+                      onClick={() => setEditingWorkspace(workspace)}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                  </Tip>
+                )}
+                {showChat && current?.expiresAt && (
                   <div className="retention-notice">
-                    <Clock3 size={13} />
-                    <span>
-                      Deletes in {daysRemaining(current.expiresAt)} days.
+                    <span
+                      title={`Deletes in ${expiryText(current.expiresAt)}.`}
+                    >
+                      Temporary · {expiryText(current.expiresAt)}
                     </span>
                     <button
-                      onClick={() => {
-                        void keepChat(current.id).catch(report);
-                      }}
+                      aria-label="Keep this chat"
+                      onClick={() => void keepChat(current.id).catch(report)}
                     >
-                      Keep this chat
+                      Keep
                     </button>
                   </div>
                 )}
-                <form
-                  className="composer"
-                  onSubmit={(event) => void send(event)}
+              </div>
+              <Tip label="New chat · Ctrl+Shift+O">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="New chat"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!showChat) setView("chat");
+                    void createChat();
+                  }}
                 >
-                  <label className="sr-only" htmlFor="prompt">
-                    Message
-                  </label>
-                  <textarea
-                    ref={composer}
-                    id="prompt"
-                    rows={2}
-                    placeholder={
-                      running
-                        ? "Write your next message… Esc to stop"
-                        : "Ask anything…"
-                    }
-                    value={draft}
-                    aria-invalid={draftTooLong || undefined}
-                    aria-describedby={draftTooLong ? "draft-limit" : undefined}
-                    onChange={(event) => changeDraft(event.target.value)}
-                    disabled={loading || busy || (native && !currentId)}
-                    maxLength={65536}
-                    onKeyDown={(event) => {
+                  <SquarePen size={19} />
+                </Button>
+              </Tip>
+            </header>
+            {!native && (
+              <div className="preview-notice">
+                Interface preview · Open the desktop app for SQLite storage and
+                model connections.
+              </div>
+            )}
+            {error && (
+              <div className="error-banner" role="alert">
+                <span>{error}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Dismiss error"
+                  onClick={() => setError(null)}
+                >
+                  <X size={16} />
+                </Button>
+              </div>
+            )}
+            {showChat ? (
+              <>
+                <div
+                  ref={conversation}
+                  className={`conversation ${messages.length ? "has-messages" : ""}`}
+                  onWheel={(event) => {
+                    if (
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.defaultPrevented
+                    )
+                      return;
+                    const area = event.currentTarget;
+                    if (
+                      !(event.target instanceof Element) ||
+                      !area.contains(event.target)
+                    )
+                      return;
+                    // Leave gestures in independently scrolling content alone.
+                    for (
+                      let node: Element | null = event.target;
+                      node && node !== area;
+                      node = node.parentElement
+                    ) {
                       if (
-                        event.key === "Escape" &&
-                        !event.nativeEvent.isComposing &&
-                        running &&
-                        currentId
-                      ) {
-                        event.preventDefault();
-                        void api.stop(currentId).catch(report);
+                        node.clientHeight > 0 &&
+                        node.scrollHeight > node.clientHeight + 1 &&
+                        ["auto", "scroll"].includes(
+                          getComputedStyle(node).overflowY,
+                        )
+                      )
                         return;
-                      }
-                      if (
-                        !running &&
-                        event.key === "Enter" &&
-                        !event.shiftKey &&
-                        !event.nativeEvent.isComposing
-                      ) {
-                        event.preventDefault();
-                        event.currentTarget.form?.requestSubmit();
-                      }
-                    }}
-                  />
-                  <div className="composer-toolbar">
-                    <div className="composer-model">
-                      <ModelPicker
-                        models={models}
-                        preferences={preferences}
-                        update={updatePreferences}
-                        open={pickerOpen}
-                        onOpenChange={setPickerOpen}
-                        connecting={connecting}
-                        onConnect={() => {
-                          setPickerOpen(false);
-                          setSettings(true);
-                        }}
-                        onSelected={() => focusComposer(currentId ?? undefined)}
-                      />
-                      {running ? (
+                    }
+                    if (event.deltaY < 0) nearBottom.current = false;
+                    else if (
+                      event.deltaY > 0 &&
+                      event.deltaMode === 0 &&
+                      event.deltaY >=
+                        area.scrollHeight - area.scrollTop - area.clientHeight
+                    )
+                      // Capture intent before deferred growth changes the bottom
+                      // between native wheel scrolling and its scroll event.
+                      nearBottom.current = true;
+                  }}
+                  onScroll={(event) => {
+                    const el = event.currentTarget;
+                    const atLatest =
+                      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                    // Growing content can emit scroll events without an upward
+                    // move. That must not turn a pinned reader into an unpinned one.
+                    if (el.scrollTop < lastScrollTop.current - 1 || atLatest)
+                      nearBottom.current = atLatest;
+                    lastScrollTop.current = el.scrollTop;
+                  }}
+                  aria-label="Conversation"
+                >
+                  {loading ? (
+                    <div className="loading-state" role="status">
+                      <LoaderCircle className="spin" size={22} />
+                      <span>Opening your chat…</span>
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="welcome">
+                      <h1>What’s on your mind?</h1>
+                    </div>
+                  ) : (
+                    <div className="message-list" ref={messageList}>
+                      {moreHistory && (
                         <Button
-                          variant="primary"
-                          size="icon"
-                          aria-label="Stop responses"
-                          onClick={() => {
-                            if (currentId)
-                              void api.stop(currentId).catch(report);
-                          }}
+                          variant="ghost"
+                          size="small"
+                          onClick={() => void older()}
+                          disabled={loadingHistory}
                         >
-                          <Square size={13} fill="currentColor" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          size="icon"
-                          type="submit"
-                          aria-label={
-                            waitingForModels
-                              ? "Connecting models"
-                              : "Send message"
-                          }
-                          disabled={
-                            !draft.trim() ||
-                            busy ||
-                            loading ||
-                            waitingForModels ||
-                            draftTooLong
-                          }
-                        >
-                          {busy || waitingForModels ? (
-                            <LoaderCircle className="spin" size={16} />
+                          {loadingHistory ? (
+                            <LoaderCircle className="spin" size={14} />
                           ) : (
-                            <ArrowUp size={20} />
+                            <ArrowUp size={14} />
                           )}
+                          Load earlier messages
                         </Button>
                       )}
+                      {messages.map((message) => (
+                        <ChatMessage
+                          key={message.id}
+                          message={message}
+                          models={models}
+                          onError={report}
+                          onReuse={reusePrompt}
+                          onStop={stopResponse}
+                          onRetry={
+                            retryable.has(message.id)
+                              ? retryResponse
+                              : undefined
+                          }
+                          retryDisabled={loading || busy || running}
+                          reuseDisabled={loading || busy}
+                        />
+                      ))}
                     </div>
-                  </div>
-                </form>
-                <div className="composer-footer">
-                  <span>
+                  )}
+                </div>
+                <div className="composer-region">
+                  {currentId &&
+                    draftFailures.has(currentId) &&
+                    !saving &&
+                    !draftTooLong && (
+                      <p className="composer-error" role="alert">
+                        Couldn’t save this draft. Your text is still here.
+                        <Button
+                          size="small"
+                          variant="ghost"
+                          onClick={() => {
+                            const snapshot = draftCache.current.get(currentId);
+                            if (snapshot)
+                              draftWriter.enqueue({
+                                chatId: currentId,
+                                ...snapshot,
+                              });
+                          }}
+                        >
+                          Retry save
+                        </Button>
+                      </p>
+                    )}
+                  {draftTooLong && (
+                    <p className="composer-error" id="draft-limit" role="alert">
+                      This message is too long to save or send. Shorten it
+                      first. Your text is still here.
+                    </p>
+                  )}
+                  <form
+                    className="composer"
+                    onSubmit={(event) => void send(event)}
+                  >
+                    <label className="sr-only" htmlFor="prompt">
+                      Message
+                    </label>
+                    <textarea
+                      ref={composer}
+                      id="prompt"
+                      rows={2}
+                      placeholder={
+                        running
+                          ? "Write your next message… Esc to stop"
+                          : "Ask anything…"
+                      }
+                      value={draft}
+                      aria-invalid={draftTooLong || undefined}
+                      aria-describedby={
+                        draftTooLong ? "draft-limit" : undefined
+                      }
+                      onChange={(event) => changeDraft(event.target.value)}
+                      disabled={loading || busy || (native && !currentId)}
+                      maxLength={65536}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Escape" &&
+                          !event.nativeEvent.isComposing &&
+                          running &&
+                          currentId
+                        ) {
+                          event.preventDefault();
+                          void api.stop(currentId).catch(report);
+                          return;
+                        }
+                        if (
+                          !running &&
+                          event.key === "Enter" &&
+                          !event.shiftKey &&
+                          !event.nativeEvent.isComposing
+                        ) {
+                          event.preventDefault();
+                          event.currentTarget.form?.requestSubmit();
+                        }
+                      }}
+                    />
+                    <div className="composer-toolbar">
+                      <div className="composer-model">
+                        <ModelPicker
+                          models={models}
+                          preferences={preferences}
+                          update={updatePreferences}
+                          open={pickerOpen}
+                          onOpenChange={setPickerOpen}
+                          connecting={connecting}
+                          onConnect={() => {
+                            setPickerOpen(false);
+                            setSettings(true);
+                          }}
+                          onSelected={() =>
+                            focusComposer(currentId ?? undefined)
+                          }
+                        />
+                        {running ? (
+                          <Button
+                            variant="primary"
+                            size="icon"
+                            aria-label="Stop responses"
+                            onClick={() => {
+                              if (currentId)
+                                void api.stop(currentId).catch(report);
+                            }}
+                          >
+                            <Square size={13} fill="currentColor" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="primary"
+                            size="icon"
+                            type="submit"
+                            aria-label={
+                              waitingForModels
+                                ? "Connecting models"
+                                : "Send message"
+                            }
+                            disabled={
+                              !draft.trim() ||
+                              busy ||
+                              loading ||
+                              waitingForModels ||
+                              draftTooLong
+                            }
+                          >
+                            {busy || waitingForModels ? (
+                              <LoaderCircle className="spin" size={16} />
+                            ) : (
+                              <ArrowUp size={20} />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </form>
+                  <output className="sr-only" aria-live="off">
                     {saving
                       ? "Saving draft…"
                       : currentId && draftCache.current.has(currentId)
@@ -1457,88 +1508,66 @@ export function App() {
                         : native
                           ? "Saved on this device"
                           : "Desktop preview"}
-                  </span>
-                  {currentId &&
-                    draftCache.current.has(currentId) &&
-                    !saving &&
-                    !draftTooLong && (
-                      <Button
-                        size="small"
-                        variant="ghost"
-                        onClick={() => {
-                          const snapshot = draftCache.current.get(currentId);
-                          if (snapshot)
-                            draftWriter.enqueue({
-                              chatId: currentId,
-                              ...snapshot,
-                            });
-                        }}
-                      >
-                        Retry save
-                      </Button>
-                    )}
-                  <span>
-                    Enter to send <span className="footer-dot">·</span> Shift +
-                    Enter for a new line
-                  </span>
+                  </output>
                 </div>
+              </>
+            ) : (
+              <div className="workspace-page">
+                <div className="page-title-row">
+                  <div>
+                    <h1>{viewInfo.label}</h1>
+                    <p>{descriptions[view as keyof typeof descriptions]}</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={() => setCreateKind(view as Workspace["kind"])}
+                  >
+                    <Plus size={16} />
+                    New{" "}
+                    {view === "bots"
+                      ? "bot"
+                      : view === "spaces"
+                        ? "space"
+                        : "project"}
+                  </Button>
+                </div>
+                {workspaces.filter((item) => item.kind === view).length ? (
+                  <div className="workspace-grid">
+                    {workspaces
+                      .filter((item) => item.kind === view)
+                      .map((item) => (
+                        <button
+                          className="workspace-card"
+                          key={item.id}
+                          disabled={busy}
+                          onClick={() => void openWorkspace(item)}
+                        >
+                          <viewInfo.icon size={23} strokeWidth={1.5} />
+                          <h2>{item.name}</h2>
+                          {item.instructions && <p>{item.instructions}</p>}
+                          <span aria-hidden="true">
+                            <ArrowUp size={13} />
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="workspace-empty">
+                    <viewInfo.icon size={42} strokeWidth={1} />
+                    <h2>No {view} yet.</h2>
+                  </div>
+                )}
               </div>
-            </>
-          ) : (
-            <div className="workspace-page">
-              <div className="page-title-row">
-                <div>
-                  <h1>{viewInfo.label}</h1>
-                  <p>{descriptions[view as keyof typeof descriptions]}</p>
-                </div>
-                <Button
-                  variant="primary"
-                  onClick={() => setCreateKind(view as Workspace["kind"])}
-                >
-                  <Plus size={16} />
-                  New{" "}
-                  {view === "bots"
-                    ? "bot"
-                    : view === "spaces"
-                      ? "space"
-                      : "project"}
-                </Button>
-              </div>
-              {workspaces.filter((item) => item.kind === view).length ? (
-                <div className="workspace-grid">
-                  {workspaces
-                    .filter((item) => item.kind === view)
-                    .map((item) => (
-                      <button
-                        className="workspace-card"
-                        key={item.id}
-                        disabled={busy}
-                        onClick={() => void openWorkspace(item)}
-                      >
-                        <viewInfo.icon size={23} strokeWidth={1.5} />
-                        <h2>{item.name}</h2>
-                        {item.instructions && <p>{item.instructions}</p>}
-                        <span aria-hidden="true">
-                          <ArrowUp size={13} />
-                        </span>
-                      </button>
-                    ))}
-                </div>
-              ) : (
-                <div className="workspace-empty">
-                  <viewInfo.icon size={42} strokeWidth={1} />
-                  <h2>No {view} yet.</h2>
-                </div>
-              )}
-            </div>
-          )}
-        </main>
+            )}
+          </main>
+        </Dialog.Root>
         <Modal
           open={settings}
           onOpenChange={(open) => {
             setSettings(open);
             if (!open) setConnectionTarget(null);
           }}
+          returnFocus={() => navigationTrigger.current}
           title="Your connections"
           description="Bring your models into one workspace."
           wide

@@ -62,3 +62,5 @@ The [Claude API connection](docs/CLAUDE-API.md) has a protected key/workspace id
 The [xAI API connection](docs/XAI-API.md) has protected keys, discovered text models/available reasoning choices and Responses streaming. CI synthetic tests and 18-workflow native empty-profile acceptance passed at 0cf7e4f; real account/inference remains unverified; this does not yet deliver the separately qualified Grok Build subscription route.
 
 The [simplicity/recovery pass](docs/SIMPLER-PAVANE.md) consolidates repeated controls and adds guarded response retry, connection recheck and draft-save retry. It passed CI and synthetic native workflows at 02bc628, including recovery after reload and narrow provider setup. Live cloud retry and independent persisted-retry review remain open before merge/delivery. These controls do not create/execute pages or repair arbitrary code.
+
+The [Open Canvas redesign](docs/OPEN-CANVAS.md) implements Dylan's selected darker full-window chat direction with drawer navigation and quieter controls. Its new CI/native/capture verification is pending; the prior 02bc628 acceptance does not verify this changed layout.

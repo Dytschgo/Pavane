@@ -11,7 +11,6 @@ import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
 import { useCopyFeedback } from "../lib/use-copy-feedback";
-import { providerPresentation } from "../lib/provider-presentation";
 
 const Markdown = lazy(() =>
   import("./markdown").then((module) => ({ default: module.Markdown })),
@@ -51,7 +50,6 @@ export const ChatMessage = memo(function ChatMessage({
           : message.model?.startsWith("xai:")
             ? "xAI"
             : "Ollama");
-  const ProviderIcon = providerPresentation(provider).chatIcon;
   const name =
     model?.name ?? message.model?.split(":").slice(1).join(":") ?? "Assistant";
   const running = message.status === "pending" || message.status === "running";
@@ -75,13 +73,8 @@ export const ChatMessage = memo(function ChatMessage({
     >
       {message.role === "assistant" && (
         <div className="message-label">
-          <div
-            className={`avatar-assistant provider-${provider.toLowerCase()}`}
-          >
-            <ProviderIcon size={15} />
-          </div>
-          <strong>{name}</strong>
-          <span className="message-provider">{provider}</span>
+          <strong title={provider}>{name}</strong>
+          <span className="sr-only">{provider}</span>
           {running && (
             <span className="run-status">
               <LoaderCircle className="spin" size={12} />
