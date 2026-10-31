@@ -67,6 +67,7 @@ mod windows {
     use super::*;
     use std::os::windows::ffi::OsStrExt;
     use std::ptr::{NonNull, null_mut};
+    use std::sync::Mutex;
     use windows_sys::Win32::Foundation::{ERROR_NOT_FOUND, GetLastError};
     use windows_sys::Win32::Security::Credentials::{
         CRED_MAX_CREDENTIAL_BLOB_SIZE, CRED_MAX_GENERIC_TARGET_NAME_LENGTH,
@@ -78,6 +79,11 @@ mod windows {
     const READ_ERROR: &str = "Cannot read the saved Gemini API key.";
     const WRITE_ERROR: &str = "Cannot save the Gemini API key.";
     const DELETE_ERROR: &str = "Cannot remove the saved Gemini API key.";
+
+    // One process-wide boundary across all profile handles. Keep the synchronous
+    // OS operation and read-buffer disposal together; never hold this over HTTP
+    // or an await. Poisoning fails closed through the existing redacted errors.
+    static CREDENTIAL_ACCESS: Mutex<()> = Mutex::new(());
 
     impl Vault {
         pub(crate) fn new(directory: &Path) -> Result<Self, String> {
@@ -97,6 +103,7 @@ mod windows {
         }
 
         pub(crate) fn read(&self) -> Result<Option<Secret>, String> {
+            let _access = CREDENTIAL_ACCESS.lock().map_err(|_| READ_ERROR)?;
             let mut raw = null_mut();
             // SAFETY: target is NUL terminated; raw is a valid output pointer.
             let success =
@@ -135,6 +142,7 @@ mod windows {
         }
 
         pub(crate) fn write(&self, mut secret: Secret) -> Result<(), String> {
+            let _access = CREDENTIAL_ACCESS.lock().map_err(|_| WRITE_ERROR)?;
             let credential = CREDENTIALW {
                 Type: CRED_TYPE_GENERIC,
                 TargetName: self.target.as_ptr().cast_mut(),
@@ -152,6 +160,7 @@ mod windows {
         }
 
         pub(crate) fn delete(&self) -> Result<(), String> {
+            let _access = CREDENTIAL_ACCESS.lock().map_err(|_| DELETE_ERROR)?;
             // SAFETY: target is a valid NUL-terminated string.
             if unsafe { CredDeleteW(self.target.as_ptr(), CRED_TYPE_GENERIC, 0) } != 0 {
                 return Ok(());
