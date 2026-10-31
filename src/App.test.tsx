@@ -679,7 +679,7 @@ describe("durable draft interaction", () => {
     await waitFor(() => expect(input).toBeEnabled());
     const oversized = "界".repeat(30_000);
     fireEvent.change(input, { target: { value: oversized } });
-    await screen.findByText(/Shorten it to save and send/);
+    await screen.findByText(/Shorten it first/);
     expect(input).toHaveValue(oversized);
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(mocked.saveDraft).not.toHaveBeenCalled();
@@ -698,9 +698,7 @@ describe("durable draft interaction", () => {
     await waitFor(() => expect(mocked.saveDraft).toHaveBeenCalledTimes(1));
     expect(input).not.toHaveAttribute("aria-invalid");
     expect(screen.getByRole("button", { name: "Send message" })).toBeEnabled();
-    expect(
-      screen.queryByText(/Shorten it to save and send/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Shorten it first/)).not.toBeInTheDocument();
   });
 
   it("acknowledges the latest queued save rather than an earlier write", async () => {
@@ -905,18 +903,21 @@ it("removing a Gemini key preserves its selection without falling back to anothe
   await screen.findByRole("button", {
     name: "Model: Gemini test. Change model",
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Connections and settings" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manage Gemini API" }));
   await screen.findByLabelText("Gemini API key");
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+    expect(
+      screen.getByRole("button", { name: "Recheck connections" }),
+    ).toBeEnabled(),
   );
   mocked.catalog.mockResolvedValue(codex);
   fireEvent.click(screen.getByRole("button", { name: "Remove key" }));
   await screen.findByText("API key removed.");
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+    expect(
+      screen.getByRole("button", { name: "Recheck connections" }),
+    ).toBeEnabled(),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
@@ -963,12 +964,13 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   await screen.findByRole("button", {
     name: "Model: Claude test. Change model",
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Connections and settings" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manage Claude API" }));
   await screen.findByLabelText("Claude API key");
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+    expect(
+      screen.getByRole("button", { name: "Recheck connections" }),
+    ).toBeEnabled(),
   );
   let finish!: (catalog: Catalog) => void;
   mocked.catalog.mockReturnValue(
@@ -979,7 +981,9 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   fireEvent.click(screen.getByRole("button", { name: "Remove connection" }));
   await screen.findByText("Claude connection removed.");
   expect(screen.getByText("2 models ready")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Recheck connections" }),
+  ).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -1059,12 +1063,13 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
   await screen.findByRole("button", {
     name: "Model: xAI test. Change model",
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Connections and settings" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  fireEvent.click(screen.getByRole("button", { name: "Manage xAI API" }));
   await screen.findByLabelText("xAI API key");
   await waitFor(() =>
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled(),
+    expect(
+      screen.getByRole("button", { name: "Recheck connections" }),
+    ).toBeEnabled(),
   );
   let finish!: (catalog: Catalog) => void;
   mocked.catalog.mockReturnValue(
@@ -1078,7 +1083,9 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
   expect(screen.getByText("Gemini access retained")).toBeInTheDocument();
   expect(screen.getByText("Claude access retained")).toBeInTheDocument();
   expect(screen.queryByText("xAI synthetic access")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Refresh" })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Recheck connections" }),
+  ).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
   await waitFor(() =>
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
@@ -1107,4 +1114,127 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
   expect(
     screen.getByRole("option", { name: /Claude test/ }),
   ).toBeInTheDocument();
+});
+
+it("retries a failed response without resubmitting its user message or clearing the draft", async () => {
+  connectSol();
+  const failed = {
+    ...sentTurn.user,
+    id: "failed-reply",
+    role: "assistant" as const,
+    model: "codex:sol",
+    content: "Saved partial",
+    status: "failed" as const,
+    sequence: 2,
+  };
+  mocked.messages.mockResolvedValue({
+    items: [sentTurn.user, failed],
+    hasMore: false,
+  });
+  mocked.draft.mockResolvedValue("Keep my unsent note 🦀");
+  mocked.send.mockResolvedValue({
+    ...sentTurn,
+    runs: [{ ...sentTurn.runs[0], id: "retry-run", messageId: "retry-reply" }],
+  });
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const editor = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Keep my unsent note 🦀"));
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() =>
+    expect(mocked.send).toHaveBeenCalledWith(
+      first.id,
+      "",
+      ["codex:sol"],
+      expect.any(Function),
+      { "codex:sol": { reasoningEffort: "low", serviceTier: "default" } },
+      "failed-reply",
+    ),
+  );
+  expect(editor).toHaveValue("Keep my unsent note 🦀");
+  expect(screen.getAllByRole("article", { name: "Your message" })).toHaveLength(
+    1,
+  );
+  expect(screen.getByText("Saved partial")).toBeInTheDocument();
+  expect(mocked.saveDraft).not.toHaveBeenCalled();
+});
+
+it("rechecks a failed connection without clearing the draft or sending a message", async () => {
+  mocked.catalog.mockRejectedValue(new Error("Synthetic discovery failure"));
+  mocked.draft.mockResolvedValue("Keep this note");
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Keep this note"));
+  fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+  await screen.findByText(/Couldn’t check connections/);
+  connectSol();
+  fireEvent.click(screen.getByRole("button", { name: "Recheck connections" }));
+  await screen.findByText("1 model ready");
+  expect(screen.queryByText(/Couldn’t check connections/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  expect(editor).toHaveValue("Keep this note");
+  expect(mocked.send).not.toHaveBeenCalled();
+  expect(
+    screen.queryByRole("button", { name: "Provider connections" }),
+  ).toBeNull();
+  expect(screen.getAllByRole("button", { name: "Connections" })).toHaveLength(
+    1,
+  );
+});
+
+it("retries the exact failed draft save and removes the warning only after acknowledgement", async () => {
+  mocked.saveDraft
+    .mockRejectedValueOnce(new Error("Synthetic disk failure"))
+    .mockResolvedValue(undefined);
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  fireEvent.change(editor, { target: { value: "Retain this draft 🦀" } });
+  await screen.findByText(/Couldn’t save this draft/);
+  fireEvent.click(screen.getByRole("button", { name: "Retry save" }));
+  await waitFor(() =>
+    expect(screen.queryByText(/Couldn’t save this draft/)).toBeNull(),
+  );
+  expect(mocked.saveDraft).toHaveBeenLastCalledWith(
+    first.id,
+    "Retain this draft 🦀",
+  );
+  expect(editor).toHaveValue("Retain this draft 🦀");
+  expect(mocked.send).not.toHaveBeenCalled();
+});
+
+it("opens connection recovery for an unavailable retry model without switching providers", async () => {
+  connectSol();
+  mocked.messages.mockResolvedValue({
+    items: [
+      sentTurn.user,
+      {
+        ...sentTurn.user,
+        id: "failed-gemini",
+        role: "assistant",
+        model: "gemini:missing",
+        content: "Retained partial",
+        status: "failed",
+        sequence: 2,
+      },
+    ],
+    hasMore: false,
+  });
+  mocked.draft.mockResolvedValue("Keep this unsent draft");
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByRole("dialog", { name: "Your connections" });
+  expect(
+    screen.getByRole("region", { name: "Gemini API setup" }),
+  ).toBeVisible();
+  expect(mocked.send).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  expect(
+    screen.getByRole("button", { name: "Model: Sol, Low. Change model" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue(
+    "Keep this unsent draft",
+  );
+  expect(await screen.findByText("Retained partial")).toBeInTheDocument();
 });

@@ -182,9 +182,7 @@ try {
   checks.push(
     "real GPT-6.1-Sol streamed through native IPC into Markdown, list and code block",
   );
-  await page
-    .getByRole("button", { name: "Provider connections", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
   await page
     .getByText("Connected through your Codex CLI login", { exact: true })
     .waitFor();

@@ -1,6 +1,6 @@
 # Pavane
 
-A local desktop workspace for conversations, projects, spaces, bots, images, and video. Windows first, with a Rust core, SQLite storage, and a compact interface inspired by shadcn/ui.
+A local desktop workspace for conversations, projects, spaces and reusable assistants. Windows first, with a Rust core, SQLite storage, and a compact interface inspired by shadcn/ui.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ pnpm desktop
 
 If Codex CLI is installed and signed in with ChatGPT, Pavane discovers its models and selects the default automatically. Open the composer model picker to choose a model, reasoning level or supported service tier. Your login stays with Codex; Pavane never copies its credentials. See the [official Codex setup](https://developers.openai.com/codex/cli/).
 
-Local Ollama models are discovered automatically too. Start Ollama with a local model already installed; **Connections** refreshes discovery and shows provider status. Ollama uses `127.0.0.1:11434`; cloud-tagged models are excluded. Pavane never downloads a model or installs a provider automatically.
+Local Ollama models are discovered automatically too. Start Ollama with a local model already installed; **Connections → Recheck connections** refreshes discovery and shows provider status. Ollama uses `127.0.0.1:11434`; cloud-tagged models are excluded. Pavane never downloads a model or installs a provider automatically.
 
 ```powershell
 pnpm check
@@ -41,9 +41,9 @@ The current PR includes a [Gemini API connection](docs/GEMINI-API.md) with Windo
 - Up to four parallel model responses per prompt, with a bounded native queue and individual Stop controls.
 - Projects, spaces, and bots with reusable instructions and grouped conversations.
 - Edit their saved names and instructions from the pencil beside the workspace name. Conflicting edits are rejected; failed saves keep your text.
-- Six workflow routes, keyboard navigation, model search, and connection settings.
+- Four working routes, keyboard navigation, model search, and one connection setup hub.
 
-Additional provider adapters, autonomous agent swarms, attachments, and image/video generation are tracked in [TASKS.md](TASKS.md). Their interface scaffolds are labeled **Planned**. Parallel model comparison does not delegate tools or create autonomous agents.
+Additional provider adapters, autonomous agent swarms, attachments, and image/video generation are tracked in [TASKS.md](TASKS.md). Unimplemented capabilities stay out of everyday controls. Parallel model comparison does not delegate tools or create autonomous agents.
 
 ## Your data
 
@@ -60,3 +60,5 @@ The source is public. The project owner has deferred choosing a license; no proj
 The [Claude API connection](docs/CLAUDE-API.md) has a protected key/workspace identity, discovered models and text streaming. CI mocks/vault/renderer and native empty-profile controls passed at e24aa5c, alongside all 17 native workflows; live account/inference remains unverified.
 
 The [xAI API connection](docs/XAI-API.md) has protected keys, discovered text models/available reasoning choices and Responses streaming. CI synthetic tests and 18-workflow native empty-profile acceptance passed at 0cf7e4f; real account/inference remains unverified; this does not yet deliver the separately qualified Grok Build subscription route.
+
+The [simplicity/recovery pass](docs/SIMPLER-PAVANE.md) consolidates repeated controls and adds guarded response retry, connection recheck and draft-save retry. Its source and regression/native fixtures are authored; CI and changed native acceptance are pending. These controls do not create/execute pages or repair arbitrary code.

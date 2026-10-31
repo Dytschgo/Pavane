@@ -99,6 +99,24 @@ fn message_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
     })
 }
 
+fn retry_snapshot(
+    connection: &Connection,
+    chat_id: &str,
+    message_id: &str,
+) -> Result<(Message, String)> {
+    let model: Option<String> = connection.query_row(
+        "SELECT m.model FROM messages m WHERE m.id=?1 AND m.chat_id=?2 AND m.role='assistant'
+        AND m.status IN ('failed','interrupted','cancelled') AND m.model IS NOT NULL
+        AND m.sequence>(SELECT MAX(sequence) FROM messages WHERE chat_id=?2 AND role='user')
+        AND NOT EXISTS(SELECT 1 FROM messages WHERE chat_id=?2 AND model=m.model AND sequence>m.sequence)
+        AND NOT EXISTS(SELECT 1 FROM messages WHERE chat_id=?2 AND status IN ('pending','running'))",
+        params![message_id,chat_id], |row| row.get(0)).optional().map_err(sql)?;
+    let model = model
+        .ok_or("This response can no longer be retried. Open the latest message and try again.")?;
+    let user = connection.query_row("SELECT id,chat_id,role,content,model,status,created_at,sequence FROM messages WHERE chat_id=?1 AND role='user' ORDER BY sequence DESC LIMIT 1",[chat_id],message_row).map_err(sql)?;
+    Ok((user, model))
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
         // Own the database before crash recovery. A second process must never
@@ -426,6 +444,52 @@ impl Store {
             return Err("This run has already ended.".into());
         }
         Ok(())
+    }
+
+    pub fn retry_source(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        now: i64,
+    ) -> Result<(Message, String)> {
+        self.require_chat(chat_id, now)?;
+        retry_snapshot(&self.0, chat_id, message_id)
+    }
+
+    /// Append one new attempt; retain the original reply, prompt and unsent draft.
+    pub fn begin_retry(
+        &mut self,
+        chat_id: &str,
+        message_id: &str,
+        now: i64,
+    ) -> Result<(Message, Vec<Run>)> {
+        self.require_chat(chat_id, now)?;
+        let transaction = self
+            .0
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        let (user, model) = retry_snapshot(&transaction, chat_id, message_id)?;
+        let run = Run {
+            id: Uuid::new_v4().to_string(),
+            chat_id: chat_id.into(),
+            message_id: Uuid::new_v4().to_string(),
+            model,
+        };
+        transaction.execute("INSERT INTO messages(id,chat_id,role,model,status,created_at) VALUES (?1,?2,'assistant',?3,'pending',?4)", params![run.message_id,chat_id,run.model,now]).map_err(sql)?;
+        transaction
+            .execute(
+                "INSERT INTO runs(id,chat_id,message_id,model) VALUES (?1,?2,?3,?4)",
+                params![run.id, chat_id, run.message_id, run.model],
+            )
+            .map_err(sql)?;
+        transaction
+            .execute(
+                "UPDATE chats SET updated_at=?2 WHERE id=?1",
+                params![chat_id, now],
+            )
+            .map_err(sql)?;
+        transaction.commit().map_err(sql)?;
+        Ok((user, vec![run]))
     }
 
     pub fn context(&self, chat_id: &str, now: i64) -> Result<Vec<Message>> {

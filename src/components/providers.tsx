@@ -1,4 +1,5 @@
-import { Check, LoaderCircle, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import type { Model, ProviderStatus } from "../lib/types";
 import { Button } from "./ui/button";
 import { GeminiKeyForm } from "./gemini-key-form";
@@ -8,6 +9,7 @@ import { providerPresentation } from "../lib/provider-presentation";
 
 export function Providers({
   models,
+  initialProvider = "codex",
   providers,
   busy,
   onRefresh,
@@ -15,18 +17,24 @@ export function Providers({
   error,
 }: {
   models: Model[];
+  initialProvider?: string;
   providers: ProviderStatus[];
   busy: boolean;
   onRefresh: () => void;
   onCredentialsChanged?: (providerId: "gemini" | "claude" | "xai") => void;
   error: string | null;
 }) {
+  const [selected, setSelected] = useState(
+    ["codex", "ollama", "gemini", "claude", "xai"].includes(initialProvider)
+      ? initialProvider
+      : "codex",
+  );
   return (
     <div className="provider-settings">
       <div className="connection-intro">
         <span>
           {models.length
-            ? `${models.length} models ready`
+            ? `${models.length} ${models.length === 1 ? "model" : "models"} ready`
             : busy
               ? "Finding your models…"
               : "Your model connections"}
@@ -42,130 +50,148 @@ export function Providers({
           ) : (
             <RefreshCw size={14} />
           )}
-          Refresh
+          {busy ? "Checking…" : "Recheck connections"}
         </Button>
       </div>
-      {["codex", "ollama", "gemini", "claude", "xai"].map((id) => {
-        const { label: name, icon: Icon } = providerPresentation(id);
-        const status = providers.find((provider) => provider.id === id);
-        const connected = status?.state === "connected";
-        return (
-          <div className="connection" key={id}>
-            <div className="provider-row">
-              <div className={`provider-mark provider-${id}`}>
-                <Icon size={21} />
-              </div>
-              <div className="provider-info">
-                <strong>{name}</strong>
+      <div className="connections-layout">
+        <div className="connection-list" role="group" aria-label="Providers">
+          {["codex", "ollama", "gemini", "claude", "xai"].map((id) => {
+            const { label, icon: Icon } = providerPresentation(id);
+            const status = providers.find((provider) => provider.id === id);
+            return (
+              <Button
+                key={id}
+                className="connection-choice"
+                variant="ghost"
+                aria-label={`Manage ${label}`}
+                aria-pressed={selected === id}
+                onClick={() => setSelected(id)}
+              >
+                <Icon size={19} />
+                <strong>{label}</strong>
                 <span>
                   {busy && !status
-                    ? "Checking connection…"
-                    : (status?.detail ??
-                      (id === "codex"
-                        ? "Uses your existing Codex CLI subscription login"
-                        : id === "gemini"
-                          ? "Add a Gemini API key"
-                          : id === "claude"
-                            ? "Add a Claude Console API key"
-                            : id === "xai"
-                              ? "Add an xAI Console API key"
-                              : "Local models on this device"))}
+                    ? "Checking…"
+                    : status?.state === "connected"
+                      ? "Connected"
+                      : status?.state === "signedOut"
+                        ? "Sign in needed"
+                        : "Not connected"}
                 </span>
-              </div>
-              <span
-                className={`connection-badge ${connected ? "connected" : ""}`}
+              </Button>
+            );
+          })}
+        </div>
+        <div className="connection-editor">
+          {["codex", "ollama", "gemini", "claude", "xai"].map((id) => {
+            const { label: name, icon: Icon } = providerPresentation(id);
+            const status = providers.find((provider) => provider.id === id);
+            return (
+              <section
+                className="connection"
+                key={id}
+                hidden={selected !== id}
+                aria-label={`${name} setup`}
               >
-                {connected ? (
-                  <>
-                    <Check size={12} />
-                    Connected
-                  </>
-                ) : busy ? (
-                  "Checking"
-                ) : status?.state === "signedOut" ? (
-                  "Sign in needed"
-                ) : (
-                  "Not connected"
-                )}
-              </span>
-            </div>
-            {!!status?.limits.length && (
-              <div className="usage-windows">
-                {status.limits.map((window, index) => (
-                  <div className="usage-window" key={index}>
-                    <div>
-                      <span>
-                        {window.windowMinutes
-                          ? window.windowMinutes >= 1440
-                            ? `${Math.round(window.windowMinutes / 1440)}-day usage`
-                            : `${Math.round(window.windowMinutes / 60)}-hour usage`
-                          : window.label}
-                      </span>
-                      <strong>{Math.round(window.usedPercent)}%</strong>
-                    </div>
-                    <meter
-                      min={0}
-                      max={100}
-                      value={window.usedPercent}
-                      aria-label={window.label}
-                    />
-                    {window.resetsAt && (
-                      <small>
-                        Resets{" "}
-                        {new Date(window.resetsAt * 1000).toLocaleString(
-                          undefined,
-                          {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
-                      </small>
-                    )}
+                <div className="provider-row">
+                  <div className={`provider-mark provider-${id}`}>
+                    <Icon size={21} />
                   </div>
-                ))}
-              </div>
-            )}
-            {id === "codex" && status?.state === "signedOut" && (
-              <p className="connection-help">
-                Sign in once with <code>codex login</code>, then refresh. Pavane
-                keeps your credentials with Codex.
-              </p>
-            )}
-            {id === "gemini" && (
-              <GeminiKeyForm
-                onChanged={() =>
-                  onCredentialsChanged
-                    ? onCredentialsChanged("gemini")
-                    : onRefresh()
-                }
-              />
-            )}
-            {id === "xai" && (
-              <ApiKeyForm
-                provider="xai"
-                onChanged={() =>
-                  onCredentialsChanged
-                    ? onCredentialsChanged("xai")
-                    : onRefresh()
-                }
-              />
-            )}
-            {id === "claude" && (
-              <ClaudeKeyForm
-                onChanged={() =>
-                  onCredentialsChanged
-                    ? onCredentialsChanged("claude")
-                    : onRefresh()
-                }
-              />
-            )}
-          </div>
-        );
-      })}
+                  <div className="provider-info">
+                    <strong>{name}</strong>
+                  </div>
+                </div>
+                {((id === "codex" && status?.state !== "signedOut") ||
+                  id === "ollama" ||
+                  (!["codex", "ollama"].includes(id) &&
+                    status &&
+                    !["connected", "needsKey"].includes(status.state))) && (
+                  <p className="connection-help">
+                    {status?.detail ??
+                      (id === "codex"
+                        ? "Sign in with Codex, then recheck connections."
+                        : "Start Ollama on this device, then recheck connections.")}
+                  </p>
+                )}
+                {!!status?.limits.length && (
+                  <div className="usage-windows">
+                    {status.limits.map((window, index) => (
+                      <div className="usage-window" key={index}>
+                        <div>
+                          <span>
+                            {window.windowMinutes
+                              ? window.windowMinutes >= 1440
+                                ? `${Math.round(window.windowMinutes / 1440)}-day usage`
+                                : `${Math.round(window.windowMinutes / 60)}-hour usage`
+                              : window.label}
+                          </span>
+                          <strong>{Math.round(window.usedPercent)}%</strong>
+                        </div>
+                        <meter
+                          min={0}
+                          max={100}
+                          value={window.usedPercent}
+                          aria-label={window.label}
+                        />
+                        {window.resetsAt && (
+                          <small>
+                            Resets{" "}
+                            {new Date(window.resetsAt * 1000).toLocaleString(
+                              undefined,
+                              {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {id === "codex" && status?.state === "signedOut" && (
+                  <p className="connection-help">
+                    Sign in once with <code>codex login</code>, then recheck
+                    connections. Pavane keeps your credentials with Codex.
+                  </p>
+                )}
+                {id === "gemini" && (
+                  <GeminiKeyForm
+                    onChanged={() =>
+                      onCredentialsChanged
+                        ? onCredentialsChanged("gemini")
+                        : onRefresh()
+                    }
+                  />
+                )}
+                {id === "xai" && (
+                  <ApiKeyForm
+                    provider="xai"
+                    onChanged={() =>
+                      onCredentialsChanged
+                        ? onCredentialsChanged("xai")
+                        : onRefresh()
+                    }
+                  />
+                )}
+                {id === "claude" && (
+                  <ClaudeKeyForm
+                    onChanged={() =>
+                      onCredentialsChanged
+                        ? onCredentialsChanged("claude")
+                        : onRefresh()
+                    }
+                  />
+                )}
+              </section>
+            );
+          })}
+        </div>
+      </div>
       {error && (
-        <p role="status" className="field-error">
+        <p role="alert" className="field-error">
           {error}
         </p>
       )}

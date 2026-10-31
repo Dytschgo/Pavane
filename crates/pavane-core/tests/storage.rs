@@ -2,6 +2,140 @@ use pavane_core::{DELETE_SOON_MS, Store};
 const NOW: i64 = 1_800_000_000_000;
 
 #[test]
+fn retry_retains_the_original_prompt_partial_and_unsent_draft() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&directory.path().join("retry.sqlite3")).unwrap();
+    let chat = store.create_chat(false, None, NOW).unwrap();
+    let (user, runs) = store
+        .begin_turn(&chat.id, "Original prompt", &["ollama:test".into()], NOW)
+        .unwrap();
+    store
+        .update_run(&runs[0], "Saved partial", "failed", NOW)
+        .unwrap();
+    store
+        .save_draft(&chat.id, "My unsent thought 🦀", NOW)
+        .unwrap();
+    let (retry_user, retry) = store
+        .begin_retry(&chat.id, &runs[0].message_id, NOW + 1)
+        .unwrap();
+    assert_eq!(retry_user.id, user.id);
+    assert_eq!(retry[0].model, "ollama:test");
+    assert_ne!(retry[0].message_id, runs[0].message_id);
+    let messages = store.messages(&chat.id, None, NOW + 1).unwrap();
+    assert_eq!(messages.len(), 3);
+    assert_eq!(messages[1].content, "Saved partial");
+    assert_eq!(messages[1].status, "failed");
+    assert_eq!(messages[2].status, "pending");
+    assert_eq!(
+        store.draft(&chat.id, NOW + 1).unwrap(),
+        "My unsent thought 🦀"
+    );
+    assert!(
+        store
+            .begin_retry(&chat.id, &runs[0].message_id, NOW + 1)
+            .is_err()
+    );
+    store
+        .update_run(&retry[0], "New failure", "failed", NOW + 2)
+        .unwrap();
+    assert!(
+        store
+            .begin_retry(&chat.id, &runs[0].message_id, NOW + 2)
+            .is_err()
+    );
+    assert!(
+        store
+            .begin_retry(&chat.id, &retry[0].message_id, NOW + 2)
+            .is_ok()
+    );
+}
+
+#[test]
+fn retry_rejects_wrong_chat_active_complete_and_obsolete_turns() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&directory.path().join("retry.sqlite3")).unwrap();
+    let chat = store.create_chat(false, None, NOW).unwrap();
+    let other = store.create_chat(false, None, NOW).unwrap();
+    let (user, runs) = store
+        .begin_turn(
+            &chat.id,
+            "Original",
+            &["ollama:a".into(), "ollama:b".into()],
+            NOW,
+        )
+        .unwrap();
+    store
+        .update_run(&runs[0], "partial", "failed", NOW)
+        .unwrap();
+    assert!(
+        store
+            .begin_retry(&chat.id, &runs[0].message_id, NOW)
+            .is_err()
+    );
+    store
+        .update_run(&runs[1], "complete sibling", "complete", NOW)
+        .unwrap();
+    assert!(
+        store
+            .begin_retry(&other.id, &runs[0].message_id, NOW)
+            .is_err()
+    );
+    assert!(store.begin_retry(&chat.id, &user.id, NOW).is_err());
+    assert!(
+        store
+            .begin_retry(&chat.id, &runs[1].message_id, NOW)
+            .is_err()
+    );
+    let (_, later) = store
+        .begin_turn(&chat.id, "New question", &["ollama:a".into()], NOW + 1)
+        .unwrap();
+    store
+        .update_run(&later[0], "new partial", "interrupted", NOW + 1)
+        .unwrap();
+    assert!(
+        store
+            .begin_retry(&chat.id, &runs[0].message_id, NOW + 1)
+            .is_err()
+    );
+    assert_eq!(store.messages(&chat.id, None, NOW + 1).unwrap().len(), 5);
+}
+
+#[test]
+fn retry_preserves_exclusive_storage_ownership_and_rejects_expired_chats() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("retry.sqlite3");
+    let mut first = Store::open(&path).unwrap();
+    let chat = first.create_chat(true, None, NOW).unwrap();
+    let (_, runs) = first
+        .begin_turn(&chat.id, "Original", &["ollama:test".into()], NOW)
+        .unwrap();
+    first
+        .update_run(&runs[0], "partial", "cancelled", NOW)
+        .unwrap();
+    assert!(Store::open(&path).is_err());
+    let (_, retry) = first
+        .begin_retry(&chat.id, &runs[0].message_id, NOW)
+        .unwrap();
+    drop(first);
+    let second = Store::open(&path).unwrap();
+    assert!(
+        second
+            .retry_source(&chat.id, &runs[0].message_id, NOW)
+            .is_err()
+    );
+    assert!(
+        second
+            .retry_source(&chat.id, &retry[0].message_id, NOW)
+            .is_ok()
+    );
+    assert!(
+        second
+            .retry_source(&chat.id, &retry[0].message_id, NOW + DELETE_SOON_MS)
+            .is_err()
+    );
+}
+
+#[test]
 fn closed_database_backup_restores_saved_conversations() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("pavane.sqlite3");

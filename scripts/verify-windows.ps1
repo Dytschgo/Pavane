@@ -107,6 +107,7 @@ try {
     $artifacts += 'native-prompt-reuse.png'
     $artifacts += 'native-response-stop.png'
     $artifacts += 'native-chat-rename.png'
+    $artifacts += 'native-recovery.png', 'native-connections.png', 'native-workspaces.png'
     $artifacts += 'performance-candidate-failure.png'
     $artifacts += 'cpu-profile-candidate.json'
       $artifacts += 'native-workspace-edit.png'

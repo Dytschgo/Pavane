@@ -8,9 +8,7 @@ import {
   Layers3,
   LoaderCircle,
   Plus,
-  RefreshCw,
   Search,
-  ShieldCheck,
   Star,
   Zap,
 } from "lucide-react";
@@ -30,7 +28,6 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   connecting: boolean;
-  onRefresh: () => void;
   onConnect: () => void;
   onSelected?: () => void;
 }
@@ -41,7 +38,6 @@ export function ModelPicker({
   open,
   onOpenChange,
   connecting,
-  onRefresh,
   onConnect,
   onSelected,
 }: Props) {
@@ -326,21 +322,6 @@ export function ModelPicker({
                   }
                 }}
               />
-              <Tip label="Refresh models">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Refresh models"
-                  disabled={connecting}
-                  onClick={onRefresh}
-                >
-                  {connecting ? (
-                    <LoaderCircle className="spin" size={14} />
-                  ) : (
-                    <RefreshCw size={14} />
-                  )}
-                </Button>
-              </Tip>
             </div>
             <div
               className="picker-list"
@@ -598,10 +579,6 @@ export function ModelPicker({
                             </div>
                           </>
                         )}
-                        <div className="model-safety">
-                          <ShieldCheck size={13} />
-                          <span>Text chat · read-only</span>
-                        </div>
                       </Popover.Content>
                     </Popover.Portal>
                   </Popover.Root>

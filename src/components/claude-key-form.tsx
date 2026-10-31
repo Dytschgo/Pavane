@@ -108,13 +108,10 @@ export function ClaudeKeyForm({ onChanged }: { onChanged: () => void }) {
         aria-describedby={`${id}-workspace-help ${id}-feedback`}
       />
       <p id={`${id}-workspace-help`} className="connection-help">
-        Required if your key is not scoped to one workspace. Save the key and
-        workspace together when replacing a connection.
+        Required when your key covers more than one workspace.
       </p>
       <p id={`${id}-help`} className="connection-help">
-        Sending may incur API charges. This Console connection is separate from
-        Claude subscription usage. Stored in Windows Credential Manager for this
-        Pavane profile.
+        API usage is billed separately from Claude subscriptions.
       </p>
       <div className="api-key-actions">
         <Button

@@ -9,7 +9,6 @@ import {
 import type { FormEvent } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
-  ArrowDown,
   ArrowUp,
   Bot,
   Check,
@@ -18,23 +17,19 @@ import {
   Clock3,
   Folder,
   HardDrive,
-  Image,
   Layers3,
   LoaderCircle,
   MessageCircle,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
-  Paperclip,
   Pencil,
   Plus,
   Search,
   Settings2,
-  ShieldCheck,
   Sparkles,
   Square,
   Trash2,
-  Video,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -66,8 +61,6 @@ const views: { id: View; label: string; icon: LucideIcon }[] = [
   { id: "projects", label: "Projects", icon: Folder },
   { id: "spaces", label: "Spaces", icon: Layers3 },
   { id: "bots", label: "Bots", icon: Bot },
-  { id: "images", label: "Images", icon: Image },
-  { id: "videos", label: "Videos", icon: Video },
 ];
 const descriptions = {
   projects: "Keep a longer piece of work together.",
@@ -76,7 +69,7 @@ const descriptions = {
 };
 
 const REUSE_LIMIT_ERROR =
-  "This prompt would exceed the 64 KiB draft limit. Shorten your draft first.";
+  "This prompt would make your draft too long. Shorten your draft first.";
 
 export function App() {
   const [view, setView] = useState<View>("chat");
@@ -98,10 +91,13 @@ export function App() {
   const discoverVersion = useRef(0);
   const wasRunning = useRef(false);
   const [settings, setSettings] = useState(false);
+  const [connectionTarget, setConnectionTarget] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [providerError, setProviderError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const sendInFlight = useRef(false);
+  const retrySend = useRef<(message: Message) => Promise<void>>(async () => {});
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [moreHistory, setMoreHistory] = useState(false);
@@ -115,8 +111,8 @@ export function App() {
   );
   const [workspaceName, setWorkspaceName] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [roadmap, setRoadmap] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftFailures, setDraftFailures] = useState(() => new Set<string>());
   const selection = useRef(0);
   const currentRef = useRef<string | null>(null);
   const draftCache = useRef(
@@ -160,10 +156,19 @@ export function App() {
       new DraftWriter(
         api.saveDraft,
         ({ chatId, version }) => {
-          if (draftCache.current.get(chatId)?.version === version)
+          if (draftCache.current.get(chatId)?.version === version) {
             draftCache.current.delete(chatId);
+            setDraftFailures((previous) => {
+              const next = new Set(previous);
+              next.delete(chatId);
+              return next;
+            });
+          }
         },
-        report,
+        (_failure, snapshot) =>
+          setDraftFailures((previous) =>
+            new Set(previous).add(snapshot.chatId),
+          ),
         setSaving,
       ),
   );
@@ -518,14 +523,11 @@ export function App() {
               ].filter((id): id is string => !!id),
             },
       );
-      if (!catalog.models.length)
-        setProviderError(
-          catalog.providers.find((provider) => provider.id === "codex")
-            ?.detail ?? "Connect a model to get started.",
-        );
-    } catch (failure) {
+    } catch {
       if (version === discoverVersion.current)
-        setProviderError(errorText(failure));
+        setProviderError(
+          "Couldn’t check connections. Your saved setup is unchanged. Recheck to try again.",
+        );
     } finally {
       if (version === discoverVersion.current) setConnecting(false);
     }
@@ -596,25 +598,40 @@ export function App() {
     editingWorkspace,
   ]);
 
-  async function send(event: FormEvent) {
-    event.preventDefault();
+  async function send(event?: FormEvent, retry?: Message) {
+    event?.preventDefault();
+    const sendModels = retry?.model ? [retry.model] : selectedModels;
     if (
-      !draft.trim() ||
+      (!retry && !draft.trim()) ||
+      sendInFlight.current ||
       busy ||
       running ||
       loading ||
       waitingForModels ||
-      draftTooLong
+      (!retry && draftTooLong)
     )
       return;
     if (
-      !selectedModels.length ||
-      selectedModels.some((id) => !models.some((model) => model.id === id))
+      !sendModels.length ||
+      sendModels.some((id) => !models.some((model) => model.id === id))
     ) {
-      setPickerOpen(true);
+      if (retry) {
+        setConnectionTarget(retry.model?.split(":")[0] ?? null);
+        setSettings(true);
+        report(
+          "Reconnect this model, then try the response again. Your draft is safe.",
+        );
+      } else setPickerOpen(true);
       return;
     }
-    const content = draft;
+    if (
+      retry &&
+      (retry.chatId !== currentId ||
+        retry.role !== "assistant" ||
+        !["failed", "interrupted", "cancelled"].includes(retry.status))
+    )
+      return;
+    const content = retry ? "" : draft;
     const originTitle =
       current?.title && current.title !== "New chat"
         ? current.title
@@ -626,6 +643,7 @@ export function App() {
         `In “${originTitle}”${name ? ` · ${name}` : ""}: ${errorText(failure)}`,
       );
     };
+    sendInFlight.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -664,7 +682,11 @@ export function App() {
         if (currentRef.current === target)
           setMessages((previous) => applyRunEvent(previous, update));
         if (update.kind === "finished") {
-          if (update.error && update.status !== "cancelled")
+          if (
+            update.error &&
+            update.status !== "cancelled" &&
+            currentRef.current !== target
+          )
             reportSendError(update.error, existing?.model ?? undefined);
           void refresh().catch(report);
         }
@@ -672,16 +694,24 @@ export function App() {
       const started = await api.send(
         target,
         content,
-        selectedModels,
+        sendModels,
         receive,
         Object.fromEntries(
-          selectedModels.map((id) => {
+          sendModels.map((id) => {
             const model = models.find((model) => model.id === id)!;
             return [id, resolveModelOptions(model, preferences.options[id])];
           }),
         ),
+        ...(retry ? ([retry.id] as const) : []),
       );
-      draftCache.current.delete(target);
+      if (!retry) {
+        draftCache.current.delete(target);
+        setDraftFailures((previous) => {
+          const next = new Set(previous);
+          next.delete(target);
+          return next;
+        });
+      }
       const placeholders: Message[] = started.runs.map((run, index) => ({
         id: run.messageId,
         chatId: target,
@@ -690,7 +720,15 @@ export function App() {
         model: run.model,
         status: "pending",
         createdAt: Date.now(),
-        sequence: started.user.sequence + index + 1,
+        sequence:
+          (retry
+            ? Math.max(
+                started.user.sequence,
+                ...messages.map((message) => message.sequence),
+              )
+            : started.user.sequence) +
+          index +
+          1,
       }));
       for (const message of placeholders)
         liveMessages.current.set(message.id, message);
@@ -706,18 +744,19 @@ export function App() {
         setMessages((previous) =>
           buffered.reduce(applyRunEvent, [
             ...previous,
-            started.user,
+            ...(retry ? [] : [started.user]),
             ...placeholders,
           ]),
         );
-        setDraft("");
+        if (!retry) setDraft("");
       }
       ready = true;
       for (const update of buffered) {
         if (
           update.kind === "finished" &&
           update.error &&
-          update.status !== "cancelled"
+          update.status !== "cancelled" &&
+          currentRef.current !== target
         )
           reportSendError(
             update.error,
@@ -729,10 +768,19 @@ export function App() {
     } catch (failure) {
       reportSendError(failure);
     } finally {
+      sendInFlight.current = false;
       setBusy(false);
       requestAnimationFrame(() => focusComposer(submittedChatId ?? undefined));
     }
   }
+
+  useLayoutEffect(() => {
+    retrySend.current = (message) => send(undefined, message);
+  });
+  const retryResponse = useCallback(
+    (message: Message) => retrySend.current(message),
+    [],
+  );
 
   async function older() {
     if (!currentId || !messages.length) return;
@@ -840,6 +888,17 @@ export function App() {
   const temporary = visibleChats.filter((chat) => chat.expiresAt);
   const viewInfo = views.find((item) => item.id === view)!;
 
+  const retryable = new Set<string>();
+  const seenModels = new Set<string>();
+  for (const message of [...messages].reverse()) {
+    if (message.role === "user") break;
+    if (message.model && !seenModels.has(message.model)) {
+      seenModels.add(message.model);
+      if (["failed", "interrupted", "cancelled"].includes(message.status))
+        retryable.add(message.id);
+    }
+  }
+
   function chatRows(list: Chat[]) {
     return list.map((chat) => (
       <div
@@ -856,7 +915,9 @@ export function App() {
         >
           <MessageCircle size={15} />
           <span>{chat.title}</span>
-          {chat.expiresAt && <small>{daysRemaining(chat.expiresAt)}d</small>}
+          {chat.expiresAt && chat.id !== currentId && (
+            <small>{daysRemaining(chat.expiresAt)}d</small>
+          )}
         </button>
         <Menu.Root>
           <Menu.Trigger asChild>
@@ -881,17 +942,6 @@ export function App() {
                 <Pencil size={14} />
                 Rename
               </Menu.Item>
-              {chat.expiresAt && (
-                <Menu.Item
-                  className="menu-item"
-                  onSelect={() => {
-                    void keepChat(chat.id).catch(report);
-                  }}
-                >
-                  <ShieldCheck size={14} />
-                  Keep this chat
-                </Menu.Item>
-              )}
               <Menu.Separator className="menu-separator" />
               <Menu.Item
                 className="menu-item destructive"
@@ -931,10 +981,10 @@ export function App() {
               </Tip>
             ))}
           </div>
-          <Tip label="Connections & settings">
+          <Tip label="Connections">
             <button
               className="rail-button rail-settings"
-              aria-label="Connections and settings"
+              aria-label="Connections"
               onClick={() => setSettings(true)}
             >
               <Settings2 size={20} strokeWidth={1.6} />
@@ -1092,16 +1142,6 @@ export function App() {
                 </div>
               )}
             </div>
-            <button className="device-status" onClick={() => setSettings(true)}>
-              <span className="device-icon">
-                <HardDrive size={16} />
-              </span>
-              <span>
-                On this device
-                <small>{native ? "Local storage" : "Interface preview"}</small>
-              </span>
-              <Settings2 size={15} />
-            </button>
           </aside>
         )}
         <main className="main-pane">
@@ -1128,35 +1168,6 @@ export function App() {
                   </span>
                 </>
               )}
-            </div>
-            <div className="header-meta">
-              {showChat && current?.expiresAt ? (
-                <Tip
-                  label={`Expires ${new Date(current.expiresAt).toLocaleString()}`}
-                >
-                  <span className="retention-tag">
-                    <Clock3 size={13} />
-                    {daysRemaining(current.expiresAt)} days left
-                  </span>
-                </Tip>
-              ) : (
-                <span className="local-tag">
-                  <span />
-                  {selectedModels.some((id) => id.startsWith("codex:"))
-                    ? "Codex · cloud"
-                    : "Local"}
-                </span>
-              )}
-              <Tip label="Provider connections">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Provider connections"
-                  onClick={() => setSettings(true)}
-                >
-                  <Settings2 size={17} />
-                </Button>
-              </Tip>
             </div>
           </header>
           {!native && (
@@ -1298,6 +1309,10 @@ export function App() {
                         onError={report}
                         onReuse={reusePrompt}
                         onStop={stopResponse}
+                        onRetry={
+                          retryable.has(message.id) ? retryResponse : undefined
+                        }
+                        retryDisabled={loading || busy || running}
                         reuseDisabled={loading || busy}
                       />
                     ))}
@@ -1305,16 +1320,27 @@ export function App() {
                 )}
               </div>
               <div className="composer-region">
+                {currentId &&
+                  draftFailures.has(currentId) &&
+                  !saving &&
+                  !draftTooLong && (
+                    <p className="composer-error" role="alert">
+                      Couldn’t save this draft. Your text is still here. Choose
+                      Retry save.
+                    </p>
+                  )}
                 {draftTooLong && (
                   <p className="composer-error" id="draft-limit" role="alert">
-                    Message exceeds 64 KiB. Shorten it to save and send. Your
-                    text is kept in this window.
+                    This message is too long to save or send. Shorten it first.
+                    Your text is still here.
                   </p>
                 )}
                 {current?.expiresAt && (
                   <div className="retention-notice">
                     <Clock3 size={13} />
-                    <span>Saved for 30 days from creation.</span>
+                    <span>
+                      Deletes in {daysRemaining(current.expiresAt)} days.
+                    </span>
                     <button
                       onClick={() => {
                         void keepChat(current.id).catch(report);
@@ -1369,20 +1395,6 @@ export function App() {
                     }}
                   />
                   <div className="composer-toolbar">
-                    <div className="inline-actions">
-                      <Tip label="Attachments are planned">
-                        <span tabIndex={0}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Attachments are planned"
-                            disabled
-                          >
-                            <Paperclip size={18} />
-                          </Button>
-                        </span>
-                      </Tip>
-                    </div>
                     <div className="composer-model">
                       <ModelPicker
                         models={models}
@@ -1391,8 +1403,10 @@ export function App() {
                         open={pickerOpen}
                         onOpenChange={setPickerOpen}
                         connecting={connecting}
-                        onRefresh={() => void connect()}
-                        onConnect={() => setSettings(true)}
+                        onConnect={() => {
+                          setPickerOpen(false);
+                          setSettings(true);
+                        }}
                         onSelected={() => focusComposer(currentId ?? undefined)}
                       />
                       {running ? (
@@ -1445,6 +1459,25 @@ export function App() {
                           ? "Saved on this device"
                           : "Desktop preview"}
                   </span>
+                  {currentId &&
+                    draftCache.current.has(currentId) &&
+                    !saving &&
+                    !draftTooLong && (
+                      <Button
+                        size="small"
+                        variant="ghost"
+                        onClick={() => {
+                          const snapshot = draftCache.current.get(currentId);
+                          if (snapshot)
+                            draftWriter.enqueue({
+                              chatId: currentId,
+                              ...snapshot,
+                            });
+                        }}
+                      >
+                        Retry save
+                      </Button>
+                    )}
                   <span>
                     Enter to send <span className="footer-dot">·</span> Shift +
                     Enter for a new line
@@ -1452,11 +1485,10 @@ export function App() {
                 </div>
               </div>
             </>
-          ) : ["projects", "spaces", "bots"].includes(view) ? (
+          ) : (
             <div className="workspace-page">
               <div className="page-title-row">
                 <div>
-                  <p className="eyebrow">YOUR WORKSPACE</p>
                   <h1>{viewInfo.label}</h1>
                   <p>{descriptions[view as keyof typeof descriptions]}</p>
                 </div>
@@ -1486,9 +1518,9 @@ export function App() {
                       >
                         <viewInfo.icon size={23} strokeWidth={1.5} />
                         <h2>{item.name}</h2>
-                        <p>{item.instructions || "Open this workspace"}</p>
-                        <span>
-                          Open workspace <ArrowUp size={13} />
+                        {item.instructions && <p>{item.instructions}</p>}
+                        <span aria-hidden="true">
+                          <ArrowUp size={13} />
                         </span>
                       </button>
                     ))}
@@ -1496,68 +1528,26 @@ export function App() {
               ) : (
                 <div className="workspace-empty">
                   <viewInfo.icon size={42} strokeWidth={1} />
-                  <h2>
-                    {view === "bots"
-                      ? "Make it your kind of assistant."
-                      : "Give your ideas a home."}
-                  </h2>
-                  <p>
-                    {view === "bots"
-                      ? "Save instructions for the way you like to work."
-                      : "Group conversations and give them shared instructions."}
-                  </p>
-                  <Button
-                    onClick={() => setCreateKind(view as Workspace["kind"])}
-                  >
-                    <Plus size={15} />
-                    Create your first{" "}
-                    {view === "bots"
-                      ? "bot"
-                      : view === "spaces"
-                        ? "space"
-                        : "project"}
-                  </Button>
-                  <small>
-                    {view === "spaces"
-                      ? "Shared context is local. Collaboration comes later."
-                      : view === "bots"
-                        ? "Reusable instructions now. Tools and autonomous swarms come later."
-                        : "Conversations and instructions now. Files and deeper context come later."}
-                  </small>
+                  <h2>No {view} yet.</h2>
                 </div>
               )}
-            </div>
-          ) : (
-            <div className="studio-empty">
-              <div className="studio-icon">
-                <viewInfo.icon size={34} strokeWidth={1.2} />
-              </div>
-              <span className="badge">Planned</span>
-              <h1>
-                {view === "images"
-                  ? "A space for the visual."
-                  : "Ideas, in motion."}
-              </h1>
-              <p>
-                {view === "images"
-                  ? "Image generation, editing, and a library of everything you make."
-                  : "Video generation, variations, and your own creative library."}
-              </p>
-              <Button onClick={() => setRoadmap(true)}>
-                See what’s next
-                <ArrowDown size={14} />
-              </Button>
             </div>
           )}
         </main>
         <Modal
           open={settings}
-          onOpenChange={setSettings}
+          onOpenChange={(open) => {
+            setSettings(open);
+            if (!open) setConnectionTarget(null);
+          }}
           title="Your connections"
           description="Bring your models into one workspace."
           wide
         >
           <Providers
+            initialProvider={
+              connectionTarget ?? selectedModels[0]?.split(":")[0] ?? "codex"
+            }
             models={models}
             providers={providers}
             busy={connecting}
@@ -1578,8 +1568,8 @@ export function App() {
           <div className="settings-bottom">
             <HardDrive size={15} />
             <span>
-              Chats stay in SQLite on this device. A selected provider receives
-              the chat context when you send.
+              Chats and saved keys stay on this device. Your chosen provider
+              receives the conversation when you send.
             </span>
           </div>
         </Modal>
@@ -1710,46 +1700,6 @@ export function App() {
               </Button>
             </div>
           </form>
-        </Modal>
-        <Modal
-          open={roadmap}
-          onOpenChange={setRoadmap}
-          title="Built one workflow at a time"
-          description="What works today, and what comes next."
-        >
-          <ol className="roadmap">
-            <li>
-              <Check size={17} />
-              <div>
-                <strong>Local chat foundation</strong>
-                <p>
-                  SQLite history, Delete Soon, reusable workspaces, and
-                  local-model streaming.
-                </p>
-              </div>
-            </li>
-            <li>
-              <Layers3 size={17} />
-              <div>
-                <strong>Provider subscriptions & orchestration</strong>
-                <p>
-                  Supported subscription bridges, provider-reported limits,
-                  tools, and autonomous swarms. Parallel model comparison is
-                  available now.
-                </p>
-              </div>
-            </li>
-            <li>
-              <Image size={17} />
-              <div>
-                <strong>Images & video</strong>
-                <p>
-                  Generation adapters, media jobs, editing, and a local asset
-                  library.
-                </p>
-              </div>
-            </li>
-          </ol>
         </Modal>
       </div>
     </TooltipProvider>

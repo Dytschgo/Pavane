@@ -64,6 +64,7 @@ export const api = {
     models: string[],
     receive: (event: RunEvent) => void,
     options: Record<string, ModelOptions> = {},
+    retryOf?: string,
   ) => {
     const onEvent = new Channel<RunEvent>();
     onEvent.onmessage = receive;
@@ -73,6 +74,7 @@ export const api = {
       models,
       onEvent,
       options,
+      retryOf,
     });
   },
 };

@@ -21,7 +21,7 @@ const connections = {
       "Could not save the API key. Check Windows credential storage and try again.",
     removeError:
       "Could not remove the API key. Check Windows credential storage and try again.",
-    help: "Sending may incur API charges. Keys are stored in Windows Credential Manager for this Pavane profile.",
+    help: "API usage is billed separately from Gemini subscriptions.",
   },
   xai: {
     label: "xAI API key",
@@ -38,7 +38,7 @@ const connections = {
       "Could not save the xAI API key. Check Windows credential storage and try again.",
     removeError:
       "Could not remove the xAI API key. Check Windows credential storage and try again.",
-    help: "Sending may incur API charges, separate from Grok subscriptions. Account quota is managed in the xAI Console. Keys are stored in Windows Credential Manager for this Pavane profile.",
+    help: "API usage is billed separately from Grok subscriptions.",
   },
 };
 

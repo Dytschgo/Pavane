@@ -5,6 +5,7 @@ import {
   CornerDownLeft,
   LoaderCircle,
   Square,
+  RotateCcw,
 } from "lucide-react";
 import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
@@ -22,6 +23,8 @@ export const ChatMessage = memo(function ChatMessage({
   onError,
   onReuse,
   onStop,
+  onRetry,
+  retryDisabled = false,
   reuseDisabled = false,
 }: {
   message: Message;
@@ -29,10 +32,13 @@ export const ChatMessage = memo(function ChatMessage({
   onError: (error: unknown) => void;
   onReuse?: (message: Message) => void;
   onStop?: (message: Message) => Promise<void>;
+  onRetry?: (message: Message) => Promise<void>;
+  retryDisabled?: boolean;
   reuseDisabled?: boolean;
 }) {
   const { copied, copy } = useCopyFeedback(message.content, onError);
   const [stopping, setStopping] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const model = models.find((model) => model.id === message.model);
   const provider =
     model?.provider ??
@@ -125,7 +131,28 @@ export const ChatMessage = memo(function ChatMessage({
             ? "Interrupted when Pavane closed. Partial text was saved."
             : message.status === "cancelled"
               ? "Stopped. Partial text was saved."
-              : "Response failed. Your message is saved."}
+              : "Couldn’t finish this response. Your message is saved."}
+          {onRetry && (
+            <Button
+              size="small"
+              variant="ghost"
+              disabled={retryDisabled || retrying}
+              onClick={async () => {
+                if (retrying) return;
+                setRetrying(true);
+                try {
+                  await onRetry(message);
+                } catch (error) {
+                  onError(error);
+                } finally {
+                  setRetrying(false);
+                }
+              }}
+            >
+              <RotateCcw size={13} />
+              {retrying ? "Retrying…" : "Try again"}
+            </Button>
+          )}
         </div>
       )}
       {message.content && (

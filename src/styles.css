@@ -679,6 +679,10 @@ p {
   font-size: 16px;
 }
 .message-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin-inline-start: 0;
   margin-block-start: 12px;
   font-size: 12px;
@@ -824,7 +828,7 @@ p {
   z-index: 71;
 }
 .dialog-wide {
-  inline-size: min(560px, calc(100vw - 32px));
+  inline-size: min(760px, calc(100vw - 32px));
 }
 .dialog-heading {
   display: flex;
@@ -1937,4 +1941,73 @@ p {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.connections-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+.connection-list {
+  display: grid;
+  gap: 0.375rem;
+}
+.connection-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-items: start;
+  gap: 0.2rem 0.625rem;
+  inline-size: 100%;
+  padding-block: 0.75rem;
+  padding-inline: 0.75rem;
+  text-align: start;
+  white-space: normal;
+}
+.connection-choice > svg {
+  grid-row: span 2;
+  align-self: center;
+}
+.connection-choice > strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.connection-choice > span {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.connection-choice[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--border-strong);
+}
+.connection-editor {
+  min-inline-size: 0;
+}
+.connection-editor > .connection {
+  border: 0;
+  padding-block: 0;
+}
+.connection-editor > .connection[hidden] {
+  display: none;
+}
+.connection-editor .provider-row {
+  padding-block-start: 0;
+}
+.connection-editor .api-key-form {
+  padding-block: 0;
+}
+.connection-editor .connection-help {
+  overflow-wrap: anywhere;
+}
+.composer-toolbar {
+  justify-content: flex-end;
+}
+.connection-intro {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.composer-footer {
+  flex-wrap: wrap;
+  gap: 0.375rem 0.75rem;
 }

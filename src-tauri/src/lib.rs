@@ -391,8 +391,18 @@ async fn send_message(
     content: String,
     models: Vec<String>,
     options: Option<HashMap<String, provider::ModelOptions>>,
+    retry_of: Option<String>,
     on_event: Channel<RunEvent>,
 ) -> Result<TurnStarted, String> {
+    let retry_source = retry_of
+        .as_deref()
+        .map(|id| runtime.with_store(|store| store.retry_source(&chat_id, id, now())))
+        .transpose()?;
+    let (content, models) = if let Some((user, model)) = &retry_source {
+        (user.content.clone(), vec![model.clone()])
+    } else {
+        (content, models)
+    };
     let options = options.unwrap_or_default();
     if models.is_empty() || models.len() > 4 {
         return Err("Choose one to four models.".into());
@@ -461,9 +471,26 @@ async fn send_message(
     }
     let (user, runs, context, instructions) = runtime.with_store(|store| {
         let instructions = store.instructions(&chat_id)?;
-        let mut context = store.context(&chat_id, now())?;
-        let (user, runs) = store.begin_turn(&chat_id, &content, &models, now())?;
-        context.push(user.clone());
+        let (user, runs, mut context) = if let Some(id) = retry_of.as_deref() {
+            let (expected_user, expected_model) =
+                retry_source.as_ref().ok_or("Retry is unavailable.")?;
+            let (current_user, current_model) = store.retry_source(&chat_id, id, now())?;
+            if current_user.id != expected_user.id || current_model != *expected_model {
+                return Err("This conversation changed. Reopen it before retrying.".into());
+            }
+            let context = store
+                .messages(&chat_id, Some(current_user.sequence + 1), now())?
+                .into_iter()
+                .filter(|message| message.status == "complete")
+                .collect::<Vec<_>>();
+            let (user, runs) = store.begin_retry(&chat_id, id, now())?;
+            (user, runs, context)
+        } else {
+            let mut context = store.context(&chat_id, now())?;
+            let (user, runs) = store.begin_turn(&chat_id, &content, &models, now())?;
+            context.push(user.clone());
+            (user, runs, context)
+        };
         let mut bytes: usize = context.iter().map(|message| message.content.len()).sum();
         while context.len() > 100 || bytes > 256 * 1024 {
             bytes -= context.remove(0).content.len();

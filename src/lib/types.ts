@@ -1,5 +1,4 @@
-export type View =
-  "chat" | "projects" | "spaces" | "bots" | "images" | "videos";
+export type View = "chat" | "projects" | "spaces" | "bots";
 export interface Chat {
   id: string;
   title: string;

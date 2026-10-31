@@ -14,7 +14,7 @@ export class DraftWriter {
   constructor(
     private save: (chatId: string, content: string) => Promise<void>,
     private saved: (snapshot: DraftSnapshot) => void,
-    private failed: (error: unknown) => void,
+    private failed: (error: unknown, snapshot: DraftSnapshot) => void,
     private busy: (value: boolean) => void,
   ) {}
 
@@ -46,7 +46,7 @@ export class DraftWriter {
         await this.save(snapshot.chatId, snapshot.content);
         this.saved(snapshot);
       } catch (error) {
-        this.failed(error);
+        this.failed(error, snapshot);
       }
     }
   }

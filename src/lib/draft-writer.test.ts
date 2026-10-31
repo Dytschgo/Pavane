@@ -50,6 +50,11 @@ it("keeps the latest snapshot for each chat and continues after a failed save", 
     ["a", "latest"],
   ]);
   expect(failed).toHaveBeenCalledTimes(1);
+  expect(failed).toHaveBeenCalledWith(expect.any(Error), {
+    chatId: "a",
+    content: "old",
+    version: 1,
+  });
   expect(saved.mock.calls.map(([snapshot]) => snapshot.version)).toEqual([
     2, 4,
   ]);

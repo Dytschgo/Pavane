@@ -54,7 +54,6 @@ function Harness({
         open={open}
         onOpenChange={setOpen}
         connecting={connecting}
-        onRefresh={() => {}}
         onConnect={() => {}}
         onSelected={onSelected}
       />

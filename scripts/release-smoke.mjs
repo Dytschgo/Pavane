@@ -149,14 +149,7 @@ try {
           animations: "disabled",
           path: join(evidence, "release-empty.png"),
         });
-        for (const name of [
-          "Projects",
-          "Spaces",
-          "Bots",
-          "Images",
-          "Videos",
-          "Chat",
-        ]) {
+        for (const name of ["Projects", "Spaces", "Bots", "Chat"]) {
           await page.getByRole("button", { name, exact: true }).click();
           await page
             .getByRole("button", { name, exact: true })
@@ -182,7 +175,7 @@ try {
           path: join(evidence, "release-draft.png"),
         });
         checks.push(
-          "optimized executable loads bundled renderer, all six routes and native SQLite draft survives reload",
+          "optimized executable loads bundled renderer, all four working routes and native SQLite draft survives reload",
         );
       }
       assert.deepEqual(errors, []);

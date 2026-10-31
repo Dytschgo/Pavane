@@ -36,6 +36,7 @@ await writeFile(
 const requests = [];
 const selectiveStreams = new Map();
 let selectiveStopEvidence = null;
+let recoveryAttempts = 0;
 const mock = createServer(async (request, response) => {
   if (request.url === "/api/tags") {
     response.setHeader("content-type", "application/json");
@@ -60,6 +61,17 @@ const mock = createServer(async (request, response) => {
     ["smoke-a", "smoke-b"].includes(payload.model)
   )
     selectiveStreams.set(payload.model, streamState);
+  if (last === "RETRY_TEST recover this reply" && recoveryAttempts++ === 0) {
+    response.end(
+      JSON.stringify({
+        message: { content: "Retained failed partial." },
+        done: false,
+      }) +
+        "\n" +
+        '{"error":"synthetic recovery failure"}\n',
+    );
+    return;
+  }
   if (last.includes("FAIL_TEST")) {
     response.end('{"error":"synthetic failure"}\n');
     return;
@@ -167,11 +179,11 @@ try {
     .waitFor({ timeout: 45000 });
   await page.getByRole("option", { name: /smoke-a/ }).click();
   await page.getByRole("button", { name: "Delete Soon", exact: false }).click();
-  await page.getByText("30 days left").waitFor();
+  await page.getByText(/^Deletes in \d+ days\.$/).waitFor();
   const oversized = "界".repeat(30000);
   const editor = page.getByRole("textbox", { name: "Message", exact: true });
   await editor.fill(oversized);
-  await page.getByText(/Shorten it to save and send/).waitFor();
+  await page.getByText(/Shorten it first/).waitFor();
   assert.equal(await editor.inputValue(), oversized);
   assert.equal(
     await page
@@ -191,9 +203,7 @@ try {
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("Hello from the native smoke test");
-  await page
-    .getByText(/Shorten it to save and send/)
-    .waitFor({ state: "hidden" });
+  await page.getByText(/Shorten it first/).waitFor({ state: "hidden" });
   await page.screenshot({
     animations: "disabled",
     path: join(evidence, "native-composer-focused.png"),
@@ -350,7 +360,7 @@ try {
   await reuse.click();
   await page
     .getByText(
-      "This prompt would exceed the 64 KiB draft limit. Shorten your draft first.",
+      "This prompt would make your draft too long. Shorten your draft first.",
       { exact: true },
     )
     .waitFor();
@@ -599,8 +609,100 @@ try {
   await page
     .getByRole("button", { name: "Keep this chat", exact: true })
     .click();
-  await page.getByText("30 days left").waitFor({ state: "hidden" });
+  await page.getByText(/^Deletes in \d+ days\.$/).waitFor({ state: "hidden" });
   checks.push("convert Delete Soon to a permanent chat");
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("button", { name: /Compare models/ }).click();
+  await page.getByRole("option", { name: /smoke-a/ }).click();
+  const recoveryStart = requests.length;
+  await editor.fill("RETRY_TEST recover this reply");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const failedReply = page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last();
+  await failedReply
+    .getByRole("button", { name: "Try again", exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor({ state: "hidden" });
+  await failedReply
+    .getByText("Retained failed partial.", { exact: true })
+    .waitFor();
+  await editor.fill("Do not submit my recovery draft 🦀");
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#prompt")?.value ===
+      "Do not submit my recovery draft 🦀",
+  );
+  await failedReply
+    .getByRole("button", { name: "Try again", exact: true })
+    .click();
+  await page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last()
+    .getByText("Grüezi 🦀. A persisted response from smoke-a.", { exact: true })
+    .waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor({ state: "hidden" });
+  assert.equal(requests.length, recoveryStart + 2);
+  assert.equal(
+    requests.at(-1).messages.at(-1).content,
+    "RETRY_TEST recover this reply",
+  );
+  assert.equal(
+    requests
+      .at(-1)
+      .messages.some(
+        (message) =>
+          message.content === "Retained failed partial." ||
+          message.content === "Do not submit my recovery draft 🦀",
+      ),
+    false,
+  );
+  assert.equal(
+    await page
+      .getByRole("article", { name: "Your message", exact: true })
+      .filter({ hasText: "RETRY_TEST recover this reply" })
+      .count(),
+    1,
+  );
+  await page.reload();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#prompt")?.value ===
+      "Do not submit my recovery draft 🦀",
+  );
+  await page.getByText("Retained failed partial.", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "Try again", exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Connections", exact: true })
+      .count(),
+    1,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Provider connections", exact: true })
+      .count(),
+    0,
+  );
+  await page.screenshot({ path: join(evidence, "native-recovery.png") });
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("button", { name: /Compare models/ }).click();
+  await page.getByRole("option", { name: /smoke-b/ }).click();
+  await page.keyboard.press("Escape");
+
+  checks.push(
+    "failed response retries its original model/prompt once after reload, retains the failed partial and unsent draft without a duplicate user message, and persists the successful new attempt",
+  );
+
   await page.getByRole("button", { name: "Bots", exact: true }).click();
   await page.getByRole("button", { name: "New bot", exact: true }).click();
   await page
@@ -806,24 +908,34 @@ try {
   checks.push(
     "edited bot name/instructions survive native reload, preserve linked chats and reach the next actual provider request",
   );
-  for (const name of ["Projects", "Spaces", "Images", "Videos"]) {
+  for (const name of ["Projects", "Spaces"]) {
     await page.getByRole("button", { name, exact: true }).click();
-    await page
-      .getByRole("heading", {
-        name:
-          name === "Images"
-            ? "A space for the visual."
-            : name === "Videos"
-              ? "Ideas, in motion."
-              : name,
-        exact: true,
-      })
-      .waitFor();
+    await page.getByRole("heading", { name, exact: true }).waitFor();
+    const kind = name === "Projects" ? "project" : "space";
+    assert.equal(
+      await page
+        .getByRole("button", { name: `New ${kind}`, exact: true })
+        .count(),
+      1,
+    );
+    assert.equal(await page.locator(".workspace-empty button").count(), 0);
+    if (name === "Projects")
+      await page.screenshot({ path: join(evidence, "native-workspaces.png") });
   }
+  assert.equal(
+    await page.getByRole("button", { name: "Images", exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page.getByRole("button", { name: "Videos", exact: true }).count(),
+    0,
+  );
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   await page.screenshot({ path: join(evidence, "native-final.png") });
   assert.deepEqual(diagnostics, []);
-  checks.push("all six workflow routes, no renderer errors");
+  checks.push(
+    "all four working routes, no placeholder destinations or renderer errors",
+  );
   await page.keyboard.press("Control+k");
   await page
     .getByRole("textbox", { name: "Search chat titles", exact: true })
@@ -875,15 +987,41 @@ try {
   );
   await narrowPrompt.fill(previousDraft);
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByRole("button", { name: "Connections", exact: true }).click();
+  const connectionRequests = requests.length;
   await page
-    .getByRole("button", { name: "Provider connections", exact: true })
+    .getByRole("button", { name: "Recheck connections", exact: true })
+    .click();
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll("button")).some(
+      (button) =>
+        button.textContent?.includes("Recheck connections") && !button.disabled,
+    ),
+  );
+  await page.setViewportSize({ width: 480, height: 820 });
+  await page
+    .getByRole("button", { name: "Manage Ollama", exact: true })
+    .click();
+  assert.equal(await page.getByRole("button", { name: /^Manage / }).count(), 5);
+  assert.equal(await page.getByRole("region", { name: / setup$/ }).count(), 1);
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-connections.png") });
+  assert.equal(requests.length, connectionRequests);
+  await page.setViewportSize({ width: 720, height: 620 });
+
+  await page
+    .getByRole("button", { name: "Manage Gemini API", exact: true })
     .click();
   const apiKey = page.getByLabel("Gemini API key", { exact: true });
   await page
-    .getByText(
-      "Add a Gemini API key. API usage has separate limits and billing.",
-      { exact: true },
-    )
+    .getByText("API usage is billed separately from Gemini subscriptions.", {
+      exact: true,
+    })
     .waitFor();
   await apiKey.scrollIntoViewIfNeeded();
   assert.equal(await apiKey.getAttribute("type"), "password");
@@ -899,10 +1037,9 @@ try {
   await page.getByRole("button", { name: "Remove key", exact: true }).click();
   await page.getByText("API key removed.", { exact: true }).waitFor();
   await page
-    .getByText(
-      "Add a Gemini API key. API usage has separate limits and billing.",
-      { exact: true },
-    )
+    .getByText("API usage is billed separately from Gemini subscriptions.", {
+      exact: true,
+    })
     .waitFor();
   await page.screenshot({
     path: join(evidence, "native-gemini-connection.png"),
@@ -916,6 +1053,9 @@ try {
   checks.push(
     "Gemini API connection masks input, rejects invalid keys and removes only the empty synthetic-profile credential without API calls",
   );
+  await page
+    .getByRole("button", { name: "Manage Claude API", exact: true })
+    .click();
   const claudeKey = page.getByLabel("Claude API key", { exact: true });
   const claudeWorkspace = page.getByLabel("Workspace ID (optional)", {
     exact: true,
@@ -954,7 +1094,7 @@ try {
     .click();
   await page.getByText("Claude connection removed.", { exact: true }).waitFor();
   await page
-    .getByText("Add a Claude Console API key. API usage and billing apply.", {
+    .getByText("API usage is billed separately from Claude subscriptions.", {
       exact: true,
     })
     .waitFor();
@@ -975,6 +1115,9 @@ try {
   checks.push(
     "Claude API connection masks input, validates workspace/key together and removes only the empty profile connection without provider calls",
   );
+  await page
+    .getByRole("button", { name: "Manage xAI API", exact: true })
+    .click();
   const xaiKey = page.getByLabel("xAI API key", { exact: true });
   await xaiKey.scrollIntoViewIfNeeded();
   assert.equal(await xaiKey.getAttribute("type"), "password");
@@ -1000,10 +1143,9 @@ try {
     .click();
   await page.getByText("xAI API key removed.", { exact: true }).waitFor();
   await page
-    .getByText(
-      "Add an xAI API key. API usage has separate limits and billing.",
-      { exact: true },
-    )
+    .getByText("API usage is billed separately from Grok subscriptions.", {
+      exact: true,
+    })
     .waitFor();
   assert.equal(await xaiKey.inputValue(), "");
   await page
