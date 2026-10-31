@@ -73,3 +73,9 @@ Two native negatives and three renderer cases plus the serialized real two-strea
 ## Individual Stop acceptance checkpoint
 
 Corrected 7450713 passed all 20 native/release 2/full checks with all 21 captures inspected. Native report retains complete phase and producer counters; selected/sibling rendered text and draft matched across targeted cancellation and reload. Independent Standards1/Spec1 shared diagnostics finding corrected directly, no independent re-review; normal CI/native success passed, no injected diagnostic failure. [Scope/rollback](../RESPONSE-STOP.md), [proof](../VERIFICATION.md#individual-response-stop-ci-and-native-acceptance--31-october-2026). App/harness unchanged for this documentation checkpoint; no repeat native run needed.
+
+## Chat rename save guard source checkpoint
+
+PV-CHAT-RENAME-001 source checkpoint on PR #1 under Sol. The old form admitted repeated writes and dismissal while pending. New keyed ChatRename serializes one native write, freezes editing/dismissal during it, reports only the committed trimmed title, and retains failed edits with inline error/retry. Existing native/schema/provider boundaries unchanged. Three renderer cases and a native blank/Cancel/Unicode rename/reload/exact draft+reply/no-provider-request stage are authored, not executed. New native-chat-rename.png finally export must be retained and inspected in the next new candidate root (private native-* collector matches). [Contract/recovery/rollback](../CHAT-RENAME.md).
+
+Single-agent source review only; no independent review or runtime pass claimed. Source formatting/diff review on this PC; CI then one changed authenticated source-bound lab turn pending. No host app/tests/build/UI/provider/vault execution, lab dispatch or guard/token operation. Latest accepted exe stays 7450713; earlier evidence/custody unchanged. Push/link/watch PR #1 for CI wake, without merge.

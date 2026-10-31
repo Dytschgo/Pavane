@@ -290,6 +290,61 @@ try {
   await page.screenshot({ path: join(evidence, "native-prompt-reuse.png") });
   await page.setViewportSize(reuseViewport);
   await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
+  const renameRequests = requests.length;
+  await page.locator(".chat-row.selected .row-menu").click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const renameDialog = page.getByRole("dialog", {
+    name: "Rename chat",
+    exact: true,
+  });
+  const renameInput = renameDialog.getByRole("textbox", {
+    name: "Title",
+    exact: true,
+  });
+  await renameInput.fill("   ");
+  assert.equal(
+    await renameDialog
+      .getByRole("button", { name: "Save title", exact: true })
+      .isDisabled(),
+    true,
+  );
+  await renameInput.fill("Not committed");
+  await renameDialog
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  assert.equal(await editor.inputValue(), reusedDraft);
+  await page.locator(".chat-row.selected .row-menu").click();
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  assert.equal(
+    await renameInput.inputValue(),
+    "Hello from the native smoke test",
+  );
+  await renameInput.fill("  Renamed Grüezi 🦀  ");
+  await renameInput.press("Enter");
+  await renameDialog.waitFor({ state: "hidden" });
+  await page
+    .getByRole("button", { name: "Open chat Renamed Grüezi 🦀", exact: true })
+    .waitFor();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Open chat Renamed Grüezi 🦀", exact: true })
+    .waitFor();
+  await page.waitForFunction(
+    (expected) => document.querySelector("#prompt")?.value === expected,
+    reusedDraft,
+  );
+  assert.equal(
+    requests.length,
+    renameRequests,
+    "Renaming must not submit the draft",
+  );
+  await page
+    .getByText("Grüezi 🦀. A persisted response from smoke-a.", { exact: true })
+    .waitFor();
+  await page.screenshot({ path: join(evidence, "native-chat-rename.png") });
+  checks.push(
+    "chat rename rejects blank titles, Cancel discards edits, and trimmed Unicode title/draft/reply survive SQLite reload without a provider request",
+  );
   const fullDraft = "界".repeat(21840);
   await editor.fill(fullDraft);
   await reuse.click();

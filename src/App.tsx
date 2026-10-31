@@ -56,6 +56,7 @@ import { ModelPicker } from "./components/model-picker";
 import { Providers } from "./components/providers";
 import { WorkspaceEditor } from "./components/workspace-editor";
 import { ChatMessage } from "./components/chat-message";
+import { ChatRename } from "./components/chat-rename";
 import { useModelPreferences } from "./lib/model-preferences";
 import { resolveModelOptions } from "./lib/model-options";
 import { DraftWriter, MAX_DRAFT_BYTES } from "./lib/draft-writer";
@@ -1623,60 +1624,26 @@ export function App() {
             </Button>
           </div>
         </Modal>
-        <Modal
-          open={!!renameId}
-          onOpenChange={(open) => {
-            if (!open) setRenameId(null);
-          }}
-          title="Rename chat"
-          description="Give this conversation a title you can find again."
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!renameId) return;
-              void api
-                .rename(renameId, renameTitle)
-                .then(async () => {
-                  setSelectedChat((previous) =>
-                    previous?.id === renameId
-                      ? { ...previous, title: renameTitle.trim() }
-                      : previous,
-                  );
-                  setChats((previous) =>
-                    previous.map((chat) =>
-                      chat.id === renameId
-                        ? { ...chat, title: renameTitle.trim() }
-                        : chat,
-                    ),
-                  );
-                  setRenameId(null);
-                  await refresh();
-                })
-                .catch(report);
+        {renameId && (
+          <ChatRename
+            key={renameId}
+            chatId={renameId}
+            title={renameTitle}
+            onClose={() => setRenameId(null)}
+            onSaved={(title) => {
+              setSelectedChat((previous) =>
+                previous?.id === renameId ? { ...previous, title } : previous,
+              );
+              setChats((previous) =>
+                previous.map((chat) =>
+                  chat.id === renameId ? { ...chat, title } : chat,
+                ),
+              );
+              setRenameId(null);
+              void refresh().catch(report);
             }}
-          >
-            <label className="field-label" htmlFor="chat-title">
-              Title
-            </label>
-            <input
-              className="text-input"
-              id="chat-title"
-              value={renameTitle}
-              maxLength={120}
-              onChange={(event) => setRenameTitle(event.target.value)}
-              required
-            />
-            <div className="dialog-actions">
-              <Button type="button" onClick={() => setRenameId(null)}>
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit">
-                Save title
-              </Button>
-            </div>
-          </form>
-        </Modal>
+          />
+        )}
         {editingWorkspace && (
           <WorkspaceEditor
             key={editingWorkspace.id}
