@@ -32,6 +32,7 @@ The current PR includes a [Gemini API connection](docs/GEMINI-API.md) with Windo
 ## What works
 
 - SQLite conversations and drafts that survive reloads and restarts.
+- Reuse an earlier prompt with **Add prompt to draft**, preserving existing draft text and waiting for you to send.
 - **Delete Soon** chats saved for 30 days from creation, with an option to keep them.
 - Local Ollama model discovery and streaming, partial-response recovery, and cancellation.
 - Codex subscription chat through the official local app-server, with real model capabilities and provider-reported usage windows.

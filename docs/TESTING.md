@@ -98,3 +98,7 @@ The next changed native stage adds an earlier synthetic user prompt to an empty 
 ## Native viewport restore correction
 
 The183108d lab turn failed restoring page.viewportSize(), which is null for this CDP-attached native WebView. Measure actual innerWidth/innerHeight before overriding, as the existing editor stage already does. Close and restore the navigation sidebar for the new narrow reuse capture. Existing assertions and app behavior stay unchanged; corrected CI/new native proof pending. [Failure evidence](VERIFICATION.md#prompt-reuse-native-harness-correction--31-october-2026).
+
+## Prompt reuse accepted
+
+CI 9c75c3d and actual lab 20261031T060244Z-bf586e95826b passed all 19 native/release 2/full checks. Keyboard activation, draft append, native save/reload, no implicit request, combined overflow and measured viewport restoration were exercised. All20 captures inspected, including native-prompt-reuse.png with the sidebar dismissed. Earlier 183 harness failure remains retained. [Exact provenance and cleanup](VERIFICATION.md#prompt-reuse-ci-and-native-acceptance--31-october-2026). No local app execution.
