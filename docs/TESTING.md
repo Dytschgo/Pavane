@@ -103,6 +103,10 @@ The183108d lab turn failed restoring page.viewportSize(), which is null for this
 
 CI 9c75c3d and actual lab 20261031T060244Z-bf586e95826b passed all 19 native/release 2/full checks. Keyboard activation, draft append, native save/reload, no implicit request, combined overflow and measured viewport restoration were exercised. All20 captures inspected, including native-prompt-reuse.png with the sidebar dismissed. Earlier 183 harness failure remains retained. [Exact provenance and cleanup](VERIFICATION.md#prompt-reuse-ci-and-native-acceptance--31-october-2026). No local app execution.
 
-## Targeted Stop stage — pending
+## Targeted Stop stage — source checkpoint (historical)
 
-The new stage cancels only one of two real loopback responses, checks continued sibling production and rendered text, preserves the draft, then reloads and cancels the remaining response by its persisted message identity. Compare both partial replies and draft after another reload. Export native-response-stop.png in finally; retain phase/producers on failure. Existing global Stop/IME checks bind their newest reply. CI/new native proof pending; never replay old guards.
+The new stage cancels only one of two real loopback responses, checks continued sibling production and rendered text, preserves the draft, then reloads and cancels the remaining response by its persisted message identity. Compare both partial replies and draft after another reload. Export native-response-stop.png in finally; retain phase/producers on failure. Existing global Stop/IME checks bind their newest reply. CI/new native proof was pending at this source checkpoint; the accepted result follows. Never replay old guards.
+
+## Targeted Stop accepted
+
+CI 7450713 and lab 20261031T063901Z-1532b2c64172 passed 20 native/release 2/full checks. Selected Stop preserved text while sibling production/rendering continued, then targeted Stop worked after reload; draft and both rendered partials matched afterward. All 21 captures inspected, including native-response-stop.png. Bounded phase/counters retained in successful report; failure export remains source-inspected only. [Exact provenance and cleanup](VERIFICATION.md#individual-response-stop-ci-and-native-acceptance--31-october-2026). No host app execution.

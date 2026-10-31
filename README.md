@@ -38,7 +38,7 @@ The current PR includes a [Gemini API connection](docs/GEMINI-API.md) with Windo
 - Codex subscription chat through the official local app-server, with real model capabilities and provider-reported usage windows.
 - Searchable model picker, favourites, remembered reasoning/tier settings and Ctrl+1–9 favourite shortcuts.
 - Markdown replies, lists, tables and code blocks with copy actions; safe web links open in your default browser.
-- Up to four parallel model responses per prompt, with a bounded native queue.
+- Up to four parallel model responses per prompt, with a bounded native queue and individual Stop controls.
 - Projects, spaces, and bots with reusable instructions and grouped conversations.
 - Edit their saved names and instructions from the pencil beside the workspace name. Conflicting edits are rejected; failed saves keep your text.
 - Six workflow routes, keyboard navigation, model search, and connection settings.
