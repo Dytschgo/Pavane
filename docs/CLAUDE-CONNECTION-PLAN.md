@@ -1,6 +1,6 @@
 # Claude connection contract — 31 October 2026
 
-PV-CLAUDE-API-001 is the next implementation slice under PV-PROVIDER-002. This contract guided the authored API slice, whose CI/native acceptance is still pending. [Implementation, verification gaps and rollback](CLAUDE-API.md). No Claude credentials, installed CLI, provider request or live account was accessed. Existing Codex/Ollama/Gemini behavior stays intact.
+PV-CLAUDE-API-001 is the implemented API slice under PV-PROVIDER-002. This contract guided the source accepted in CI and empty-profile native verification at e24aa5c; live account/inference remains unverified. [Implementation, verification gaps and rollback](CLAUDE-API.md). No real Claude credential, installed CLI authentication or live provider account/request was accessed. Existing Codex/Ollama/Gemini behavior stays intact.
 
 ## Connection routes
 

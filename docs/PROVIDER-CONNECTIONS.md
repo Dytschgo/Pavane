@@ -51,3 +51,5 @@ Rollback removes this audit/decision and restores the previous task/plan pointer
 The next bounded implementation is the [Claude Console-key/workspace contract](CLAUDE-CONNECTION-PLAN.md). It records the current versioned API and keeps the documented unmodified Claude Code subscription exception as a separate qualification candidate. The earlier audit is historical; it must not be read as a blanket subscription prohibition. Public-only research, no runtime or live account acceptance.
 
 Claude API source is now authored under [PV-CLAUDE-API-001](CLAUDE-API.md), with CI and native verification pending. The separate unmodified binary qualification candidate and prohibition on collecting consumer tokens are unchanged.
+
+Claude API acceptance at e24aa5c: CI mocks/vault/renderer plus actual empty-profile native controls passed; live key/model/account inference remains unverified. The separate unmodified Claude Code subscription candidate is unchanged. [Exact evidence](VERIFICATION.md#claude-api-ci-and-native-controls-accepted--31-october-2026).

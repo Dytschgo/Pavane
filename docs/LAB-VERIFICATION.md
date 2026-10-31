@@ -1,6 +1,12 @@
 # Pavane Windows lab run
 
-## Current accepted baseline — 31 October, 03:44 UTC
+## Current accepted baseline — 31 October, 04:31 UTC
+
+CI e24aa5c passed 66 renderer tests/10 files, 15 verifier helpers, 58 native Rust and 12 storage tests, all static/Clippy/build/upload gates; one existing live Codex test remains intentionally ignored. Actual lab 20261031T042734Z-f3227bb42346 passed 17 native workflows, two release checks/three launches, full long-stream/history/retention and complete CPU capture. All five reports/17 PNGs/two source metadata retained with source/binary provenance; all 17 captures inspected. The Claude empty-profile form validates masked key/workspace together and removes only its absent target without saving a key or calling Anthropic. Real Claude/Gemini account setup and inference remain unverified. Tested unsigned exe/manifest saved without launch in ignored evidence/ci-build-e24aa5c/. [Exact identities/results](VERIFICATION.md#claude-api-ci-and-native-controls-accepted--31-october-2026). Prior typing 128.2835 ms remains unresolved despite latest 71.5281 ms; no causal performance claim. No real key, live-provider inference or guest Codex login acceptance.
+
+Owned disposal 4d64f1c36dc54a93b5c5e006b9eaf396 completed 04:31:32.9112611Z Boot 25→26, one restart/cleanup attempt and task/observer/workspace receipt. Historical unknown/exit 0 preserved, cleanup separately confirmed/reservation retired. Fresh 04:32:30Z status available/no reservation/cleanup fence cleared; future ownership needs a fresh probe/preflight. All 24 allowlisted artifacts retained, source/binary/report identities checked, 17 captures inspected; inputs privately moved and guard/token retained. No active root job/recovery, local app/tests/build/UI/vault/provider execution or next lab turn for the docs-only successor.
+
+## Previous accepted baseline — 31 October, 03:44 UTC
 
 CI 41164679385 passed 942e87a; source-bound lab 20261031T033906Z-39613f420854 passed 16 native/release 2/full history/retention/profile. New composition-flagged Escape check keeps ongoing native text/draft, then normal keyboard Escape stops; actual OS IME UI remains untested. Five reports/15 PNGs/two metadata retained, all 15 captures inspected. Exact unsigned tested exe/manifest saved without launch in ignored evidence/ci-build-942e87a/. [Full identities/results](VERIFICATION.md#composer-ime-cancellation-accepted--31-october-2026).
 

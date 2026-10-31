@@ -56,4 +56,4 @@ Expired chats become unreadable at their deadline, are purged at startup and at 
 
 The source is public. The project owner has deferred choosing a license; no project license is granted by this repository yet. Dependencies retain their own licenses. No T3 Code source was copied.
 
-The [Claude API connection](docs/CLAUDE-API.md) is authored in the current PR with a protected key/workspace identity, discovered models and text streaming. CI and native UI verification are pending; no live account/inference acceptance is claimed.
+The [Claude API connection](docs/CLAUDE-API.md) has a protected key/workspace identity, discovered models and text streaming. CI mocks/vault/renderer and native empty-profile controls passed at e24aa5c, alongside all 17 native workflows; live account/inference remains unverified.

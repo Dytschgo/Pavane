@@ -1,6 +1,6 @@
 # Gemini API connection
 
-The direct Gemini API baseline passed CI mock/vault and empty-key native controls; latest accepted 942e87a passed 16 native workflows/release 2/history/retention/profile, including composition-safe Escape. Live key/inference remains unverified. Earlier typing 128.2835 ms stays open despite the latest 81.5281 ms observation. Offline Gemini reply-identity regressions passed CI; their exact native visual state remains unclaimed. [Latest proof](VERIFICATION.md#composer-ime-cancellation-accepted--31-october-2026), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
+The Gemini API mock/vault and empty-profile native baseline remains accepted in the latest e24aa5c candidate, alongside the separate Claude connection. All 17 native workflows/release/history/retention/profile checks passed. Live key/inference and the exact offline saved-reply native state remain unverified. Earlier typing128.2835 ms stays open despite latest71.5281 ms; no causal improvement claim. [Latest proof](VERIFICATION.md#claude-api-ci-and-native-controls-accepted--31-october-2026), [route correction](PROVIDER-CONNECTIONS.md), [ADR-0003](decisions/ADR-0003-GEMINI-API.md).
 
 ## User workflow
 
