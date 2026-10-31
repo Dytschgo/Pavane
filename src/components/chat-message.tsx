@@ -1,5 +1,11 @@
-import { lazy, memo, Suspense } from "react";
-import { Check, Copy, CornerDownLeft, LoaderCircle } from "lucide-react";
+import { lazy, memo, Suspense, useState } from "react";
+import {
+  Check,
+  Copy,
+  CornerDownLeft,
+  LoaderCircle,
+  Square,
+} from "lucide-react";
 import type { Message, Model } from "../lib/types";
 import { Button } from "./ui/button";
 import { Tip } from "./ui/tooltip";
@@ -15,15 +21,18 @@ export const ChatMessage = memo(function ChatMessage({
   models,
   onError,
   onReuse,
+  onStop,
   reuseDisabled = false,
 }: {
   message: Message;
   models: Model[];
   onError: (error: unknown) => void;
   onReuse?: (message: Message) => void;
+  onStop?: (message: Message) => Promise<void>;
   reuseDisabled?: boolean;
 }) {
   const { copied, copy } = useCopyFeedback(message.content, onError);
+  const [stopping, setStopping] = useState(false);
   const model = models.find((model) => model.id === message.model);
   const provider =
     model?.provider ??
@@ -40,6 +49,17 @@ export const ChatMessage = memo(function ChatMessage({
   const name =
     model?.name ?? message.model?.split(":").slice(1).join(":") ?? "Assistant";
   const running = message.status === "pending" || message.status === "running";
+  async function stop() {
+    if (!onStop || !running || stopping) return;
+    setStopping(true);
+    try {
+      await onStop(message);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setStopping(false);
+    }
+  }
   return (
     <article
       className={`message message-${message.role}`}
@@ -61,6 +81,20 @@ export const ChatMessage = memo(function ChatMessage({
               <LoaderCircle className="spin" size={12} />
               {message.status === "pending" ? "Queued" : "Responding"}
             </span>
+          )}
+          {running && onStop && (
+            <Tip label={stopping ? "Stopping…" : "Stop this response"}>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Stop this response"
+                aria-busy={stopping}
+                disabled={stopping}
+                onClick={() => void stop()}
+              >
+                <Square size={12} />
+              </Button>
+            </Tip>
           )}
         </div>
       )}

@@ -40,6 +40,8 @@ export const api = {
   keep: (chatId: string) => call<void>("keep_chat", { chatId }),
   delete: (chatId: string) => call<void>("delete_chat", { chatId }),
   stop: (chatId: string) => call<void>("stop_chat", { chatId }),
+  stopResponse: (chatId: string, messageId: string) =>
+    call<void>("stop_response", { chatId, messageId }),
   workspaces: () => call<Workspace[]>("list_workspaces"),
   createWorkspace: (kind: string, name: string, instructions: string) =>
     call<Workspace>("create_workspace", { kind, name, instructions }),

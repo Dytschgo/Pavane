@@ -487,6 +487,16 @@ export function App() {
     [changeDraft, report],
   );
 
+  const stopResponse = useCallback(async (message: Message) => {
+    if (
+      message.chatId !== currentRef.current ||
+      message.role !== "assistant" ||
+      !["pending", "running"].includes(message.status)
+    )
+      return;
+    await api.stopResponse(message.chatId, message.id);
+  }, []);
+
   const connect = useCallback(async () => {
     const version = ++discoverVersion.current;
     setConnecting(true);
@@ -1286,6 +1296,7 @@ export function App() {
                         models={models}
                         onError={report}
                         onReuse={reusePrompt}
+                        onStop={stopResponse}
                         reuseDisabled={loading || busy}
                       />
                     ))}

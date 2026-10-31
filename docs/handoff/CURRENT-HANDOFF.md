@@ -24,7 +24,7 @@ Latest accepted requested 9c75c3d9bd6e1b668a7263c6f1375bcff854bff2; actual merge
 
 Artifact 13031974823/ZIP 577ed6766af35595afe6859ee91d2c374188a12181b63d4dd67cfa3537ccf852; 78 source files/source e083671b6e956431ccb7c2a0bfe645ae50bbd034406e89724c74c91935ce5f08; binary 8,760,832 bytes/SHA dc9b35603c1155f2bc17ee62320dd137c1fcc2f177aae4acae37bfd848d95895. Transport 111 files/manifest B3032BF20482C5E92C8FDFBDBC45678BFF8D0C89CAE709AA5626AFFC5374F044. Exact tested unsigned exe/manifest in ignored evidence/ci-build-9c75c3d/. Typing p95 74.1139 ms/max 120.1685 ms passed unchanged budgets; prior 128.2835 ms cause open. Complete CPU 19,733.606 ms/11,732 samples/0 backward steps; no causal speedup/RAM claim.
 
-PV-PROVIDER-002 retains separately qualified subscription CLI candidates and real API-key/inference gaps. Do not copy consumer credentials or infer quota from plan names. Exact offline saved API-reply native states, actual OS IME candidate UI, guest Codex login, swarms/media/installer/signing and license remain open. Current checkpoint changes documentation only; no duplicate native run.
+PV-PROVIDER-002 retains separately qualified subscription CLI candidates and real API-key/inference gaps. Do not copy consumer credentials or infer quota from plan names. Exact offline saved API-reply native states, actual OS IME candidate UI, guest Codex login, swarms/media/installer/signing and license remain open. The a879201 acceptance checkpoint changed docs only; current targeted-Stop work below requires new CI/native acceptance.
 
 ## Lab custody
 
@@ -63,3 +63,9 @@ CI183108d passed81 renderer/77 native+12 storage/all gates. Lab20261031T055039Z-
 ## Prompt reuse acceptance checkpoint
 
 The corrected 9c75c3d harness completed all 19 native/release 2/full checks with all 20 captures inspected. New capture shows original note plus reused prompt without overlay obstruction; overflow preserved the editor. [Behavior and rollback](../PROMPT-REUSE.md), [acceptance and retained negative evidence](../VERIFICATION.md#prompt-reuse-ci-and-native-acceptance--31-october-2026). No app/harness change for this documentation checkpoint. Continue the hill climb without repeating unchanged native tests.
+
+## Current targeted response Stop source work
+
+PV-CHAT-STOP-001 adds stop_response(chatId,messageId) bound to the native active entry; a wrong pair/finished entry is a no-op. ActiveRun now holds chat/message/token; expired/global cancellation semantics and SQLite remain unchanged. An always-visible pending/running assistant Stop button waits for native status and preserves error retry/partial text. Existing Codex conservative shared-transport failure behavior remains; no remote billing or universal provider fault-isolation claim. [Scope, tests and rollback](../RESPONSE-STOP.md).
+
+Two native negatives and three renderer cases plus the serialized real two-stream stage are authored: stop A, prove fresh B producer/render growth and unchanged draft, narrow capture, reload with B active, stop restored B, reload/compare partials and draft. New native-response-stop.png finally export matches the existing private native-* collector. Success/failure reports retain phase and bounded producer state. Existing IME/global Stop assertions now target the newest reply. Independent Standards1/Spec1 reviews found one unique diagnostics gap; corrected directly, no independent re-review or execution claimed. Source-format checks only on host; CI then one changed source-bound lab turn pending. No current lab job/recovery or token/guard operation; latest accepted executable stays9c75c3d, a879201 docs CI green.

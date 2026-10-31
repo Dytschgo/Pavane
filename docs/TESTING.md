@@ -102,3 +102,7 @@ The183108d lab turn failed restoring page.viewportSize(), which is null for this
 ## Prompt reuse accepted
 
 CI 9c75c3d and actual lab 20261031T060244Z-bf586e95826b passed all 19 native/release 2/full checks. Keyboard activation, draft append, native save/reload, no implicit request, combined overflow and measured viewport restoration were exercised. All20 captures inspected, including native-prompt-reuse.png with the sidebar dismissed. Earlier 183 harness failure remains retained. [Exact provenance and cleanup](VERIFICATION.md#prompt-reuse-ci-and-native-acceptance--31-october-2026). No local app execution.
+
+## Targeted Stop stage — pending
+
+The new stage cancels only one of two real loopback responses, checks continued sibling production and rendered text, preserves the draft, then reloads and cancels the remaining response by its persisted message identity. Compare both partial replies and draft after another reload. Export native-response-stop.png in finally; retain phase/producers on failure. Existing global Stop/IME checks bind their newest reply. CI/new native proof pending; never replay old guards.

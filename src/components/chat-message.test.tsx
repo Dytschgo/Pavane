@@ -1,5 +1,6 @@
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
@@ -66,6 +67,67 @@ const reply: Message = {
   createdAt: 1,
   sequence: 1,
 };
+
+it("offers Stop before the first text and leaves status authoritative until a native update", async () => {
+  let complete!: () => void;
+  const onStop = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const pending: Message = { ...reply, content: "", status: "pending" };
+  const view = (message: Message) => (
+    <TooltipProvider>
+      <ChatMessage
+        message={message}
+        models={[]}
+        onError={vi.fn()}
+        onStop={onStop}
+      />
+    </TooltipProvider>
+  );
+  const { rerender } = render(view(pending));
+  const button = screen.getByRole("button", { name: "Stop this response" });
+  fireEvent.click(button);
+  expect(onStop).toHaveBeenCalledWith(pending);
+  expect(button).toBeDisabled();
+  expect(screen.getByText("Queued")).toBeInTheDocument();
+  expect(screen.queryByText("Stopped. Partial text was saved.")).toBeNull();
+  await act(async () => {
+    complete();
+  });
+  await waitFor(() => expect(button).toBeEnabled());
+  rerender(
+    view({ ...pending, status: "cancelled", content: "Kept partial text" }),
+  );
+  expect(
+    screen.queryByRole("button", { name: "Stop this response" }),
+  ).toBeNull();
+  expect(await screen.findByText("Kept partial text")).toBeInTheDocument();
+});
+
+it("reports a failed Stop request and leaves partial text available for another attempt", async () => {
+  const error = new Error("Synthetic stop failure");
+  const onError = vi.fn();
+  const onStop = vi.fn().mockRejectedValue(error);
+  render(
+    <TooltipProvider>
+      <ChatMessage
+        message={{ ...reply, status: "running" }}
+        models={[]}
+        onError={onError}
+        onStop={onStop}
+      />
+    </TooltipProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Stop this response" }));
+  await waitFor(() => expect(onError).toHaveBeenCalledWith(error));
+  expect(
+    screen.getByRole("button", { name: "Stop this response" }),
+  ).toBeEnabled();
+  expect(await screen.findByText(reply.content)).toBeInTheDocument();
+});
 
 it("keeps the Gemini identity when its model disappears from discovery", async () => {
   const onError = vi.fn();

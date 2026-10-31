@@ -34,6 +34,8 @@ await writeFile(
   JSON.stringify({ context, result: "running", checks: [] }, null, 2),
 );
 const requests = [];
+const selectiveStreams = new Map();
+let selectiveStopEvidence = null;
 const mock = createServer(async (request, response) => {
   if (request.url === "/api/tags") {
     response.setHeader("content-type", "application/json");
@@ -52,6 +54,12 @@ const mock = createServer(async (request, response) => {
   requests.push(payload);
   response.setHeader("content-type", "application/x-ndjson");
   const last = payload.messages.at(-1).content;
+  const streamState = { produced: 0, closed: false };
+  if (
+    last === "STOP_TEST one-response" &&
+    ["smoke-a", "smoke-b"].includes(payload.model)
+  )
+    selectiveStreams.set(payload.model, streamState);
   if (last.includes("FAIL_TEST")) {
     response.end('{"error":"synthetic failure"}\n');
     return;
@@ -61,17 +69,21 @@ const mock = createServer(async (request, response) => {
     : ["Grüezi 🦀. ", "A persisted response ", `from ${payload.model}.`];
   let index = 0;
   const timer = setInterval(() => {
-    if (index < chunks.length)
+    if (index < chunks.length) {
+      streamState.produced++;
       response.write(
         JSON.stringify({ message: { content: chunks[index++] }, done: false }) +
           "\n",
       );
-    else {
+    } else {
       clearInterval(timer);
       response.end('{"done":true}\n');
     }
   }, 90);
-  response.on("close", () => clearInterval(timer));
+  response.on("close", () => {
+    streamState.closed = true;
+    clearInterval(timer);
+  });
 });
 await new Promise((resolve, reject) => {
   mock.once("error", reject);
@@ -313,11 +325,141 @@ try {
     .waitFor({ state: "hidden" });
   assert.equal(requests.length, 3);
   checks.push("two concurrent responses with isolated model output");
+  selectiveStopEvidence = { phase: "starting", restored: false };
+  await editor.fill("STOP_TEST one-response");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const selectedReply = page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last();
+  const siblingReply = page
+    .getByRole("article", { name: "Response from smoke-b", exact: true })
+    .last();
+  await selectedReply.getByText("still thinking", { exact: false }).waitFor();
+  await siblingReply.getByText("still thinking", { exact: false }).waitFor();
+  const selectiveDraft = "My draft stays while the other response continues.";
+  await editor.fill(selectiveDraft);
+  await selectedReply
+    .getByRole("button", { name: "Stop this response", exact: true })
+    .click();
+  await selectedReply
+    .getByText("Stopped. Partial text was saved.", { exact: true })
+    .waitFor();
+  const selectedText = await selectedReply
+    .locator(".message-content")
+    .innerText();
+  const siblingTextLength = (
+    await siblingReply.locator(".message-content").innerText()
+  ).length;
+  const siblingProduced = selectiveStreams.get("smoke-b").produced;
+  Object.assign(selectiveStopEvidence, {
+    phase: "selected-stopped",
+    selectedBytes: Buffer.byteLength(selectedText),
+    siblingProducedAtStop: siblingProduced,
+  });
+  await page.waitForFunction((previous) => {
+    const replies = document.querySelectorAll(
+      'article[aria-label="Response from smoke-b"] .message-content',
+    );
+    return (
+      (replies[replies.length - 1]?.textContent?.length ?? 0) >
+      previous + 3 * "still thinking ".length
+    );
+  }, siblingTextLength);
+  const siblingProducedAfterGrowth = selectiveStreams.get("smoke-b").produced;
+  Object.assign(selectiveStopEvidence, {
+    phase: "sibling-growth-observed",
+    siblingProducedAfterGrowth,
+  });
+  assert.ok(siblingProducedAfterGrowth > siblingProduced);
+  assert.equal(selectiveStreams.get("smoke-b").closed, false);
+  assert.equal(
+    await selectedReply.locator(".message-content").innerText(),
+    selectedText,
+  );
+  assert.equal(await editor.inputValue(), selectiveDraft);
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor();
+  const selectiveViewport = await page.evaluate(() => ({
+    width: innerWidth,
+    height: innerHeight,
+  }));
+  await page.getByRole("button", { name: "Hide sidebar", exact: true }).click();
+  await page.setViewportSize({ width: 720, height: 620 });
+  await siblingReply
+    .getByRole("button", { name: "Stop this response", exact: true })
+    .focus();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await page.screenshot({ path: join(evidence, "native-response-stop.png") });
+  await page.setViewportSize(selectiveViewport);
+  await page.getByRole("button", { name: "Show sidebar", exact: true }).click();
+  await page.getByText("Saved on this device", { exact: true }).waitFor();
+  await page.reload();
+  await siblingReply
+    .getByRole("button", { name: "Stop this response", exact: true })
+    .waitFor();
+  selectiveStopEvidence.phase = "active-sibling-restored";
+  await selectedReply.locator(".markdown").waitFor();
+  assert.equal(await editor.inputValue(), selectiveDraft);
+  assert.equal(
+    await selectedReply.locator(".message-content").innerText(),
+    selectedText,
+  );
+  await siblingReply
+    .getByRole("button", { name: "Stop this response", exact: true })
+    .click();
+  await siblingReply
+    .getByText("Stopped. Partial text was saved.", { exact: true })
+    .waitFor();
+  await selectedReply.locator(".markdown").waitFor();
+  await siblingReply.locator(".markdown").waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor({ state: "hidden" });
+  const siblingText = await siblingReply
+    .locator(".message-content")
+    .innerText();
+  Object.assign(selectiveStopEvidence, {
+    phase: "sibling-stopped",
+    siblingBytes: Buffer.byteLength(siblingText),
+  });
+  await page.reload();
+  await siblingReply
+    .getByText("Stopped. Partial text was saved.", { exact: true })
+    .waitFor();
+  await selectedReply.locator(".markdown").waitFor();
+  await siblingReply.locator(".markdown").waitFor();
+  assert.equal(
+    await selectedReply.locator(".message-content").innerText(),
+    selectedText,
+  );
+  assert.equal(
+    await siblingReply.locator(".message-content").innerText(),
+    siblingText,
+  );
+  assert.equal(await editor.inputValue(), selectiveDraft);
+  assert.equal(requests.length, 5);
+  Object.assign(selectiveStopEvidence, { phase: "complete", restored: true });
+  checks.push(
+    "targeted Stop retains partial text, leaves its sibling streaming and draft intact, and remains scoped after renderer reload",
+  );
   await page
     .getByRole("textbox", { name: "Message", exact: true })
     .fill("STOP_TEST");
   await page.getByRole("button", { name: "Send message", exact: true }).click();
-  await page.getByText("still thinking", { exact: false }).first().waitFor();
+  await page
+    .getByRole("button", { name: "Stop responses", exact: true })
+    .waitFor();
+  await page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last()
+    .getByText("still thinking", { exact: false })
+    .waitFor();
   const composingDraft = "未確定の入力";
   const composingEditor = page.getByRole("textbox", {
     name: "Message",
@@ -350,8 +492,9 @@ try {
   assert.equal(await composingEditor.inputValue(), composingDraft);
   await page.keyboard.press("Escape");
   await page
+    .getByRole("article", { name: "Response from smoke-a", exact: true })
+    .last()
     .getByText("Stopped. Partial text was saved.", { exact: true })
-    .first()
     .waitFor();
   await page
     .getByRole("button", { name: "Stop responses" })
@@ -862,6 +1005,8 @@ try {
         databaseDirectory,
         checks,
         requests: requests.length,
+        selectiveStop: selectiveStopEvidence,
+        selectiveProducers: Object.fromEntries(selectiveStreams),
         fixture:
           "synthetic local Ollama-compatible HTTP server; no inference or paid requests",
         result: "passed",
@@ -877,7 +1022,14 @@ try {
   await writeFile(
     join(evidence, "native-smoke.json"),
     JSON.stringify(
-      { context, result: "failed", checks, error: String(error) },
+      {
+        context,
+        result: "failed",
+        checks,
+        selectiveStop: selectiveStopEvidence,
+        selectiveProducers: Object.fromEntries(selectiveStreams),
+        error: String(error),
+      },
       null,
       2,
     ),

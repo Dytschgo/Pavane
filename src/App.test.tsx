@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -23,6 +24,7 @@ const mocked = vi.hoisted(() => ({
   keep: vi.fn(),
   delete: vi.fn(),
   stop: vi.fn(),
+  stopResponse: vi.fn(),
   createWorkspace: vi.fn(),
   workspace: vi.fn(),
   updateWorkspace: vi.fn(),
@@ -107,6 +109,7 @@ beforeEach(() => {
   mocked.messages.mockResolvedValue({ items: [], hasMore: false });
   mocked.draft.mockResolvedValue("");
   mocked.saveDraft.mockResolvedValue(undefined);
+  mocked.stopResponse.mockResolvedValue(undefined);
   mocked.workspaces.mockResolvedValue([]);
   mocked.createChat.mockResolvedValue(second);
   mocked.catalog.mockResolvedValue({ models: [], providers: [] });
@@ -114,6 +117,47 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it("stops one restored response by chat/message identity without stopping its sibling or changing the draft", async () => {
+  connectSol();
+  const replies = ["one", "two"].map((id, index) => ({
+    ...sentTurn.user,
+    id,
+    role: "assistant" as const,
+    model: "codex:sol",
+    status: "running" as const,
+    content: `Partial ${id}`,
+    sequence: index + 2,
+  }));
+  mocked.messages.mockResolvedValue({
+    items: [sentTurn.user, ...replies],
+    hasMore: false,
+  });
+  mocked.draft.mockResolvedValue("My unsent draft");
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  const articles = await screen.findAllByRole("article", {
+    name: "Response from Sol",
+  });
+  const editor = screen.getByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("My unsent draft"));
+  fireEvent.click(
+    within(articles[0]).getByRole("button", { name: "Stop this response" }),
+  );
+  await waitFor(() =>
+    expect(mocked.stopResponse).toHaveBeenCalledWith(first.id, "one"),
+  );
+  expect(mocked.stop).not.toHaveBeenCalled();
+  expect(
+    within(articles[1]).getByRole("button", { name: "Stop this response" }),
+  ).toBeEnabled();
+  expect(within(articles[1]).getByText("Partial two")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Stop responses" }),
+  ).toBeInTheDocument();
+  expect(editor).toHaveValue("My unsent draft");
+  expect(mocked.send).not.toHaveBeenCalled();
 });
 
 it.each(["", "My unsent note 🦀\nKeep this exactly."])(

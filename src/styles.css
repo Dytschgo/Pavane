@@ -639,6 +639,8 @@ p {
 }
 .message-label strong {
   font-weight: 500;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 .avatar-user,
 .avatar-assistant {

@@ -29,7 +29,7 @@ pub(crate) fn now() -> i64 {
 
 struct Runtime {
     store: Mutex<Store>,
-    active: Mutex<HashMap<String, (String, CancellationToken)>>,
+    active: Mutex<ActiveRuns>,
     slots: Arc<Semaphore>,
     client: reqwest::Client,
     codex: codex::Manager,
@@ -54,12 +54,35 @@ impl Runtime {
         let expired = self.with_store(|store| store.purge_expired(now()))?;
         if let Ok(active) = self.active.lock() {
             for id in expired {
-                if let Some((_, token)) = active.get(&id) {
-                    token.cancel();
+                if let Some(run) = active.get(&id) {
+                    run.token.cancel();
                 }
             }
         }
         Ok(())
+    }
+}
+
+struct ActiveRun {
+    chat_id: String,
+    message_id: String,
+    token: CancellationToken,
+}
+type ActiveRuns = HashMap<String, ActiveRun>;
+
+fn cancel_response(active: &ActiveRuns, chat_id: &str, message_id: &str) {
+    for run in active.values() {
+        if run.chat_id == chat_id && run.message_id == message_id {
+            run.token.cancel();
+        }
+    }
+}
+
+fn cancel_chat(active: &ActiveRuns, chat_id: &str) {
+    for run in active.values() {
+        if run.chat_id == chat_id {
+            run.token.cancel();
+        }
     }
 }
 
@@ -178,11 +201,21 @@ fn stop_chat(runtime: State<'_, Arc<Runtime>>, chat_id: String) -> Result<(), St
         .active
         .lock()
         .map_err(|_| "Unable to stop this run.".to_string())?;
-    for (id, token) in active.values() {
-        if *id == chat_id {
-            token.cancel();
-        }
-    }
+    cancel_chat(&active, &chat_id);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_response(
+    runtime: State<'_, Arc<Runtime>>,
+    chat_id: String,
+    message_id: String,
+) -> Result<(), String> {
+    let active = runtime
+        .active
+        .lock()
+        .map_err(|_| "Unable to stop this response.".to_string())?;
+    cancel_response(&active, &chat_id, &message_id);
     Ok(())
 }
 
@@ -440,7 +473,14 @@ async fn send_message(
     // Register all cancellation tokens before starting any task.
     let tokens: Vec<_> = runs.iter().map(|_| CancellationToken::new()).collect();
     for (run, token) in runs.iter().zip(&tokens) {
-        active.insert(run.id.clone(), (run.chat_id.clone(), token.clone()));
+        active.insert(
+            run.id.clone(),
+            ActiveRun {
+                chat_id: run.chat_id.clone(),
+                message_id: run.message_id.clone(),
+                token: token.clone(),
+            },
+        );
     }
     drop(active);
     for (run, token) in runs.iter().cloned().zip(tokens) {
@@ -697,6 +737,7 @@ pub fn run() {
             keep_chat,
             delete_chat,
             stop_chat,
+            stop_response,
             list_workspaces,
             create_workspace,
             get_workspace,
@@ -742,6 +783,60 @@ mod link_tests {
         }
     }
 }
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+
+    fn entry(chat: &str, message: &str) -> ActiveRun {
+        ActiveRun {
+            chat_id: chat.into(),
+            message_id: message.into(),
+            token: CancellationToken::new(),
+        }
+    }
+
+    #[test]
+    fn response_stop_matches_both_chat_and_message_and_preserves_siblings() {
+        let mut active = ActiveRuns::from([
+            ("first-run".into(), entry("chat-a", "message-a")),
+            ("sibling-run".into(), entry("chat-a", "message-b")),
+            ("other-chat-run".into(), entry("chat-b", "message-c")),
+        ]);
+        for (chat, message) in [
+            ("chat-b", "message-a"),
+            ("chat-a", "message-c"),
+            ("chat-a", "unknown"),
+        ] {
+            cancel_response(&active, chat, message);
+            assert!(active.values().all(|run| !run.token.is_cancelled()));
+        }
+        cancel_response(&active, "chat-a", "message-a");
+        assert!(active["first-run"].token.is_cancelled());
+        assert!(!active["sibling-run"].token.is_cancelled());
+        assert!(!active["other-chat-run"].token.is_cancelled());
+        // Repeated requests and a completed run removed from the map are safe.
+        cancel_response(&active, "chat-a", "message-a");
+        active.remove("first-run");
+        cancel_response(&active, "chat-a", "message-a");
+        assert!(active.values().all(|run| !run.token.is_cancelled()));
+        assert_eq!(active.len(), 2);
+    }
+
+    #[test]
+    fn global_chat_stop_still_cancels_its_remaining_runs_only() {
+        let active = ActiveRuns::from([
+            ("first".into(), entry("chat-a", "one")),
+            ("second".into(), entry("chat-a", "two")),
+            ("third".into(), entry("chat-b", "three")),
+        ]);
+        cancel_response(&active, "chat-a", "one");
+        cancel_chat(&active, "chat-a");
+        assert!(active["first"].token.is_cancelled());
+        assert!(active["second"].token.is_cancelled());
+        assert!(!active["third"].token.is_cancelled());
+    }
+}
+
 #[cfg(test)]
 mod credential_queue_tests {
     use super::*;

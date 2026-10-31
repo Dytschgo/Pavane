@@ -1,0 +1,19 @@
+# Stop an individual response
+
+PV-CHAT-STOP-001, source authored against accepted9c75c3d and CI-green documentation checkpointa879201. CI and changed native acceptance are pending. Latest tested executable remains9c75c3d.
+
+## Product and native contract
+
+Show an always-visible icon button named **Stop this response** beside the pending/running assistant status, including before text arrives. The existing composer **Stop responses** and Escape still stop the whole chat. Preserve the draft, model choices, prior messages and retained partial text. The button is disabled during its IPC request, reports failure without deleting text, and waits for authoritative native status rather than pretending an acknowledgment completed the run. A completed/cancelled reply has no Stop control.
+
+The renderer sends chatId and messageId to stop_response. Native active entries retain both identifiers plus their cancellation token, keyed by run ID. Match both fields; a wrong pair or a finished/missing entry is an idempotent no-op. Never select by model name, which may repeat. No model invocation, token grant, schema or credential change. Existing chat-wide cancellation, expiration cleanup and terminal SQLite/event updates retain their semantics.
+
+The token is registered before task spawn and applies while queued or streaming. Cancelling drops the selected provider work through the existing path; it does not guarantee remote computation or billing stops. Codex retains its existing conservative shared-transport shutdown on a partial JSONL write or failed interruption: a provider transport failure may still fail sibling requests. This slice does not weaken that safety behavior or claim universal provider fault isolation. The ordinary targeted-token path must not cancel a sibling token.
+
+## Verification, failure and rollback
+
+Authored native negatives exercise exact chat/message binding, wrong-chat/unknown pairs, repeated/finished requests, sibling retention and unchanged global Stop. Renderer regressions cover restored response identity/draft preservation, pending-without-text, request failure/retry and authoritative terminal state. They are source, not executed results. Independent Standards1/Spec1 source reviews found one unique failure-diagnostics gap. Root now retains phase progress and bounded producer counters/closed flags in both success and failure reports. Small adjacent fixture matching corrections require the newest reply, preserving the existing IME/global Stop check after adding earlier stopped messages. These fixes were source-inspected, not independently re-reviewed or executed. CI/native acceptance remains pending.
+
+The serialized native fixture starts two actual loopback streams, stops one through its UI, checks stable partial text and continued sibling production/rendering, and preserves the draft. It reloads with the sibling active, stops it through its restored message identity and reloads again to compare both partial replies and draft. Native-response-stop.png shows the active control at narrow width with the sidebar dismissed; export it through finally and retain bounded producer counters in native-smoke.json, including failure handling. Existing global Stop/IME/reload flows then run unchanged. No real account, paid inference or host application execution.
+
+An IPC error leaves partial text and the control available for retry; a race with normal completion preserves the actual completed status. Storage/update errors use existing failure reporting. Rollback removes the targeted command/control and restores active-entry representation while preserving SQLite data, drafts, global Stop, provider settings and historical evidence. CI followed by a new authenticated source-bound lab artifact/guard must prove compilation, behavior and appearance.
