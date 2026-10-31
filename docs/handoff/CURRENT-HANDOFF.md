@@ -89,3 +89,7 @@ Single-agent source review only; no independent review or runtime pass claimed. 
 ## Chat rename acceptance checkpoint
 
 760cda9 CI/native proof and supported disposal are complete as recorded above. This docs-only successor updates task/plan/handoff and preserves previous failures. No application or harness changes; no repeat native run. Latest test binary is ignored evidence/ci-build-760cda9/pavane.exe, copied without local launch.
+
+## Simplicity CI lint correction — 31 October 2026
+
+CI 41214046817/job 124574755195 failed at ESLint on d36fae9: src/App.tsx retained the unused lucide Check import after removal of the placeholder roadmap UI. Formatting passed. Remove only that import; no application behavior, assertions, native storage or provider boundary changes. Type checking, renderer tests, verification helpers, Rust checks/tests and the build/upload were not reached. The correction awaits CI; no new artifact or native acceptance. Latest accepted executable remains 760cda9. Source formatting/diff inspection only on the working PC; no app/tests/build/UI/provider/vault execution or lab operation.

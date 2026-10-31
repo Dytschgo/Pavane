@@ -11,7 +11,6 @@ import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
   ArrowUp,
   Bot,
-  Check,
   ChevronDown,
   ChevronLeft,
   Clock3,
