@@ -1,0 +1,53 @@
+# Desktop foundation
+
+## Boundary and build
+
+Tauri 2 owns the Windows window and uses the system WebView2 runtime. Rust owns SQLite, retention, HTTP transport, cancellation and scheduling. React 19/Vite renders the UI. There is no application server or bundled Node runtime in the desktop artifact. Radix primitives provide dialogs, menus and tooltips, with local shadcn-style components and CSS tokens.
+
+`crates/pavane-core` contains persistence/domain behavior without Tauri or network dependencies. `src-tauri` is the native command boundary and provider runtime. `src` contains typed IPC calls, UI and transient run state. Only harmless UI selection metadata is kept in localStorage; conversation content and drafts are saved to SQLite.
+
+## Data and recovery
+
+Schema version 1 creates workspaces, chats, messages and runs in an immediate transaction. Foreign keys cascade chat deletion. Indexed timestamps and message sequence keys support 100-row pages. A message page has a 4 MiB content budget; provider context is at most 100 recent complete messages and 256 KiB of content. Older context is omitted rather than silently submitted without bounds. The initial renderer loads one page; deliberately loading older pages grows its history.
+
+Draft persistence starts immediately and serializes native writes. While one write is active, only the latest pending snapshot per chat is retained; send/navigation flush the queue, including work arriving at the drain/finalizer boundary. Acknowledgement clears only the matching cached version. Text over the native 64 KiB UTF-8 limit stays in the current renderer with explicit unsaved feedback and cannot be sent; shortening it resumes persistence. On successful submission, the user message, response rows, runs, generated title and cleared draft commit atomically. Duplicate submission into an active chat is rejected. Output is bounded at 2 MiB per response. SQLite WAL mode, a five-second busy timeout, `secure_delete`, and foreign keys are configured before use. Database errors are redacted without SQL, paths or user content.
+
+Normal startup preserves the existing app-data database. Optional `--profile NAME` selects `profiles/NAME` before opening SQLite; it routes the provider workspace with that database. Invalid names/arguments or storage failures never fall back. This is not account or filesystem security isolation. Release still ignores `PAVANE_DATA_DIR`; debug overrides remain supported. Verification supplies separate WebView2 directories as well. Provider credentials stay with the CLI.
+
+Running text is checkpointed at most every 500 ms when chunks arrive, and once on every terminal transition. An exclusive per-database file lock is acquired before recovery; a second owner cannot interrupt the first owner's runs. Startup marks unfinished responses `interrupted` without resubmitting inference. Up to the last checkpoint interval of text can be lost after a hard crash. A database with a newer schema is refused without schema changes. There is no destructive migration or automatic repair.
+
+Before a future schema upgrade, close Pavane and copy the complete database directory, including any WAL files. Rollback of this PR restores a README-only source tree; it must not delete user data. An older binary should refuse an unsupported schema. A corrupt or inaccessible database produces a startup failure rather than replacing it with an empty store. Automated backup/restore UI remains future work.
+
+## Delete Soon
+
+Expiry is fixed at creation + 30 × 24 hours in UTC milliseconds, not extended by activity. Queries and writes reject an expired chat at the exact boundary even before cleanup. `Keep this chat` clears its deadline only while it is still alive. Startup and a 60-second native timer purge expired chats and their message/run rows; active streams for purged chats are cancelled. While the app is closed, physical cleanup waits for the next launch. Device clock changes can shift the observed deadline.
+
+The setting governs local persistence only. No app can promise deletion of OS snapshots, manual backups, or copies held by a provider. A future attachment adapter must join the same retention lifecycle before attachments are enabled.
+
+## Runs and provider boundary
+
+The Ollama adapter restricts HTTP to `127.0.0.1:11434`, bypasses proxies, and refuses redirects. It receives no filesystem tools or credentials. Cloud-tagged models are rejected. A selected local model can itself have substantial RAM requirements; Pavane's memory measurements must be reported separately from inference.
+
+The Codex adapter launches the installed official CLI's app-server over stdio. It uses the existing ChatGPT login without opening or copying raw credentials. Model IDs, default reasoning, supported efforts, service tiers and usage windows come from the server; unavailable limits stay unknown. This protocol was exercised with CLI 0.165.0 and needs compatibility verification for later versions. Pavane does not alter the user's Codex configuration.
+
+Each prompt uses an ephemeral Codex thread and the bounded SQLite transcript. The dedicated working directory contains no project source. Per-process overrides disable shell execution, browser/computer/image tools, delegation, hooks, notifications, web search, history and configured telemetry exporters. A config-only bootstrap discovers inherited MCP/plugin names in memory; explicit disabled entries then override merged configuration in the actual client. Effective settings are checked before inference. Raw configuration is never logged or copied into arguments. Text chat uses a read-only sandbox with network access disabled and refuses every server approval request. Some Codex versions can still register native patch-tool metadata; the security boundary is the sandbox and denial of approvals, not an assertion that every tool disappears. Provider-side data retention is separate from Pavane's local Delete Soon policy.
+
+RPC exchanges include write and response deadlines, bounded pending requests and bounded event queues. A timeout invalidates the client so discovery can reconnect. A response-owned thread lease cleans up cancelled thread creation even if its reply was queued but never consumed. A run guard interrupts accepted/in-flight turns and unsubscribes ephemeral threads; rejected or never-submitted turns unsubscribe without terminating sibling chats. On Windows a waiting self-executable host is assigned to a private kill-on-close Job Object before receiving its startup gate. Only then may it launch Codex, whose descendants inherit that job. The gate reads the pipe without read-ahead, preserving the first JSON request. Shutdown owns startup children synchronously; closing/crashing Pavane terminates its provider jobs. This does not terminate an unrelated Codex process.
+
+The native scheduler allows four executing requests and eight total active/queued runs. A chat accepts one prompt at a time; a prompt may create up to four independent model responses. This implements comparison fan-out, not autonomous multi-agent orchestration. Cancellation aborts the native HTTP future and saves partial text, but a provider may continue work after the client disconnects. Runs have a ten-minute timeout. Queue, HTTP and decoder limits are enforced in Rust, independent of UI controls.
+
+Transport NDJSON is decoded across arbitrary byte and UTF-8 boundaries with a 256 KiB per-frame limit. Text is coalesced for IPC at roughly 40 ms or 4 KiB; final text is flushed before terminal status. The renderer retains a bounded live-response cache to preserve text when switching conversations during a stream. Native checkpoints are authoritative after reload.
+
+Consumer subscriptions and API billing are separate integrations. Every additional adapter must declare supported models, authentication, text/tools/media capabilities, limit data source, cancellation and recovery. Unknown quota stays unknown. Pavane accepts no OAuth tokens or API keys in this version. Use OS-protected credential storage for future API adapters and avoid reading another app's private token files.
+
+## UI security
+
+Only local bundled content runs in the desktop WebView. CSP excludes remote scripts and frames. The renderer uses explicit native commands with no shell/filesystem plugins. Assistant Markdown rejects raw HTML, blocks remote images and provides copyable code blocks/tables. Native link opening accepts only ordinary HTTP/HTTPS URLs with a host and no embedded credentials; renderer-wide automatic opening is disabled. Dialogs and menus use accessible Radix behavior. There is no Pavane telemetry, cloud synchronization, authentication system or billing infrastructure. Codex remains a separate provider process with the constraints described above.
+
+## Verification and remaining risks
+
+Saving is acknowledged after all queued draft writes finish. Failed unsaved drafts are retained across navigation in the current renderer and labeled unsaved; a process crash cannot preserve text that never reached SQLite. A draft is accepted only after its native chat exists. Selected-chat metadata and expiry remain independent of sidebar search/paging, and expired content is cleared from the renderer's live cache.
+
+Reloading the renderer no longer aborts native inference when its original IPC channel disappears. The new renderer polls selected active message snapshots every 500 ms until completion, keeping Stop usable. Partial checkpoints and terminal states remain authoritative. A second app process fails safely on the ownership lock; focusing the existing window on a second launch is future polish.
+
+[TESTING.md](TESTING.md) separates storage tests, decoder tests, renderer tests, native smoke evidence and release build checks. Native smoke uses synthetic local responses and cannot establish real model quality or provider entitlement. This is an unsigned development foundation; cross-platform builds, automatic database backups, provider capability parity, autonomous agents and installers need their own reviewed work.

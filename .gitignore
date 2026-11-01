@@ -1,0 +1,14 @@
+node_modules/
+dist/
+target/
+.env
+.env.*
+*.sqlite*
+*.db*
+*.log
+*.tsbuildinfo
+src-tauri/gen/
+evidence/
+lab-evidence/
+.crabbox/
+.DS_Store

@@ -1,0 +1,36 @@
+:root {
+  --background: light-dark(oklch(99% 0 none), oklch(14% 0 none));
+  --foreground: light-dark(oklch(20% 0 none), oklch(94% 0 none));
+  --rail: light-dark(oklch(96% 0 none), oklch(12.5% 0 none));
+  --sidebar: light-dark(oklch(97.5% 0 none), oklch(16.5% 0 none));
+  --card: light-dark(oklch(100% 0 none), oklch(18% 0 none));
+  --popover: light-dark(oklch(100% 0 none), oklch(19% 0 none));
+  --secondary: light-dark(oklch(95% 0 none), oklch(22% 0 none));
+  --accent: light-dark(oklch(93% 0 none), oklch(24% 0 none));
+  --muted-foreground: light-dark(oklch(44% 0 none), oklch(70% 0 none));
+  --subtle-foreground: light-dark(oklch(48% 0 none), oklch(65% 0 none));
+  --border: light-dark(oklch(91% 0 none), oklch(27% 0 none));
+  --border-strong: light-dark(oklch(85% 0 none), oklch(35% 0 none));
+  --primary: light-dark(oklch(23% 0 none), oklch(90% 0 none));
+  --primary-foreground: light-dark(oklch(98% 0 none), oklch(18% 0 none));
+  --ring: light-dark(oklch(45% 0.08 285), oklch(75% 0 none));
+  --destructive: oklch(55% 0.18 25);
+  --destructive-foreground: light-dark(oklch(44% 0.17 25), oklch(78% 0.12 25));
+  --destructive-surface: color-mix(
+    in oklch,
+    var(--destructive) 9%,
+    var(--background)
+  );
+  --success: light-dark(oklch(45% 0.09 155), oklch(72% 0.08 155));
+  --radius: 7px;
+  --title-size: clamp(25px, 1.3rem + 1vw, 34px);
+  --chat-width: 760px;
+  --composer-surface: light-dark(oklch(99% 0 none), oklch(18.5% 0 none));
+  --composer-border: light-dark(oklch(87% 0 none), oklch(28% 0 none));
+}
+:root {
+  --font-mono:
+    "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --code-bg: light-dark(oklch(96.5% 0 none), oklch(12% 0 none));
+  --favourite: oklch(78% 0.14 75);
+}
