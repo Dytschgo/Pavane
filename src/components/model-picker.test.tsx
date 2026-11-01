@@ -321,3 +321,61 @@ it("filters xAI and applies only its returned reasoning choices", async () => {
     }),
   ).toBeInTheDocument();
 });
+
+it("keeps composing model search on Escape and still permits ordinary dismissal", async () => {
+  const user = userEvent.setup();
+  render(<Harness />);
+  const search = await screen.findByRole("combobox");
+  await user.type(search, "Sol");
+  fireEvent.keyDown(search, { key: "Escape", isComposing: true });
+  expect(search).toBeInTheDocument();
+  expect(search).toHaveValue("Sol");
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("combobox")).toBeNull();
+});
+
+it("explains the comparison cap and preserves the four selected models", async () => {
+  const user = userEvent.setup();
+  const catalog = Array.from({ length: 5 }, (_, index) => ({
+    id: `ollama:model-${index}`,
+    name: `Model ${index}`,
+    provider: "Ollama",
+  }));
+  render(
+    <Harness
+      catalog={catalog}
+      initial={{
+        compare: true,
+        selected: catalog.slice(0, 4).map((model) => model.id),
+      }}
+    />,
+  );
+  const fifth = await screen.findByRole("option", { name: /Model 4/ });
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "4 of 4 selected. Unselect one to add another.",
+  );
+  expect(fifth).toHaveAttribute("aria-disabled", "true");
+  await user.click(fifth);
+  expect(screen.getAllByRole("option", { selected: true })).toHaveLength(4);
+  expect(fifth).toHaveAttribute("aria-selected", "false");
+  await user.click(screen.getByRole("option", { name: /Model 0/ }));
+  await user.click(fifth);
+  expect(fifth).toHaveAttribute("aria-selected", "true");
+  expect(screen.getAllByRole("option", { selected: true })).toHaveLength(4);
+});
+
+it("guides an empty comparison and closes it only after a model is chosen", async () => {
+  const user = userEvent.setup();
+  render(<Harness initial={{ compare: true, selected: [] }} />);
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Choose at least one model.",
+  );
+  expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  await user.click(screen.getByRole("option", { name: /Sol/ }));
+  expect(screen.getByRole("status")).toHaveTextContent("1 of 4 selected");
+  await user.click(screen.getByRole("button", { name: "Done" }));
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Model: Sol, Low. Change model" }),
+  ).toBeInTheDocument();
+});

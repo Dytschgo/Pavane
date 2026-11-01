@@ -136,3 +136,16 @@ it("changes only the selected provider while both key forms are present", async 
   expect(geminiChanged).not.toHaveBeenCalled();
   expect(changed).toHaveBeenCalledTimes(1);
 });
+
+it("normalizes outer clipboard whitespace without exposing the masked key", async () => {
+  api.saveXaiKey.mockResolvedValue(undefined);
+  render(<ApiKeyForm provider="xai" onChanged={changed} />);
+  const input = screen.getByLabelText("xAI API key");
+  (input as HTMLInputElement).setSelectionRange(0, 0);
+  fireEvent.paste(input, { clipboardData: { getData: () => `  ${KEY}\r\n` } });
+  expect(input).toHaveValue(KEY);
+  expect(input).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Save xAI key" }));
+  await waitFor(() => expect(api.saveXaiKey).toHaveBeenCalledWith(KEY));
+  expect(screen.queryByText(KEY)).toBeNull();
+});

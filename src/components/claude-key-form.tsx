@@ -2,6 +2,7 @@ import { ExternalLink, KeyRound, LoaderCircle, Trash2 } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
+import { pasteWholeKey } from "../lib/key-paste";
 
 export function ClaudeKeyForm({ onChanged }: { onChanged: () => void }) {
   const [key, setKey] = useState("");
@@ -79,6 +80,12 @@ export function ClaudeKeyForm({ onChanged }: { onChanged: () => void }) {
           setKey(event.target.value);
           clearFeedback();
         }}
+        onPaste={(event) =>
+          pasteWholeKey(event, (value) => {
+            setKey(value);
+            clearFeedback();
+          })
+        }
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}

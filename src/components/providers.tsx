@@ -76,7 +76,11 @@ export function Providers({
                       ? "Connected"
                       : status?.state === "signedOut"
                         ? "Sign in needed"
-                        : "Not connected"}
+                        : status?.state === "unavailable"
+                          ? "Needs attention"
+                          : status?.state === "needsKey"
+                            ? "Add API key"
+                            : "Not connected"}
                 </span>
               </Button>
             );
@@ -86,6 +90,9 @@ export function Providers({
           {["codex", "ollama", "gemini", "claude", "xai"].map((id) => {
             const { label: name, icon: Icon } = providerPresentation(id);
             const status = providers.find((provider) => provider.id === id);
+            const noModels =
+              status?.state === "connected" &&
+              !models.some((model) => model.provider.toLowerCase() === id);
             return (
               <section
                 className="connection"
@@ -101,18 +108,26 @@ export function Providers({
                     <strong>{name}</strong>
                   </div>
                 </div>
-                {((id === "codex" && status?.state !== "signedOut") ||
-                  id === "ollama" ||
-                  (!["codex", "ollama"].includes(id) &&
-                    status &&
-                    !["connected", "needsKey"].includes(status.state))) && (
-                  <p className="connection-help">
-                    {status?.detail ??
-                      (id === "codex"
-                        ? "Sign in with Codex, then recheck connections."
-                        : "Start Ollama on this device, then recheck connections.")}
+                {noModels && (
+                  <p className="connection-help" role="status">
+                    {id === "ollama"
+                      ? "Add a text model in Ollama, then recheck connections."
+                      : "This connection has no available text models. Check model access, then recheck connections."}
                   </p>
                 )}
+                {!noModels &&
+                  ((id === "codex" && status?.state !== "signedOut") ||
+                    id === "ollama" ||
+                    (!["codex", "ollama"].includes(id) &&
+                      status &&
+                      !["connected", "needsKey"].includes(status.state))) && (
+                    <p className="connection-help">
+                      {status?.detail ??
+                        (id === "codex"
+                          ? "Sign in with Codex, then recheck connections."
+                          : "Start Ollama on this device, then recheck connections.")}
+                    </p>
+                  )}
                 {!!status?.limits.length && (
                   <div className="usage-windows">
                     {status.limits.map((window, index) => (

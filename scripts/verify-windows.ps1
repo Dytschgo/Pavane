@@ -108,6 +108,7 @@ try {
     $artifacts += 'native-response-stop.png'
     $artifacts += 'native-chat-rename.png'
     $artifacts += 'native-recovery.png', 'native-connections.png', 'native-workspaces.png'
+    $artifacts += 'native-first-connection.png', 'native-first-connection-ready.png', 'native-model-comparison.png'
     $artifacts += 'native-open-canvas.png', 'native-navigation.png', 'native-navigation-narrow.png', 'native-open-canvas-narrow.png'
     $artifacts += 'performance-candidate-failure.png'
     $artifacts += 'cpu-profile-candidate.json'

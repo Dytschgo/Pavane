@@ -98,3 +98,16 @@ it("opens only the static provider key-setup URL without the entered key", async
   );
   expect(api.saveGeminiKey).not.toHaveBeenCalled();
 });
+
+it("normalizes outer clipboard whitespace without exposing the masked key", async () => {
+  api.saveGeminiKey.mockResolvedValue(undefined);
+  render(<GeminiKeyForm onChanged={changed} />);
+  const input = screen.getByLabelText("Gemini API key");
+  (input as HTMLInputElement).setSelectionRange(0, 0);
+  fireEvent.paste(input, { clipboardData: { getData: () => `  ${KEY}\r\n` } });
+  expect(input).toHaveValue(KEY);
+  expect(input).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+  await waitFor(() => expect(api.saveGeminiKey).toHaveBeenCalledWith(KEY));
+  expect(screen.queryByText(KEY)).toBeNull();
+});

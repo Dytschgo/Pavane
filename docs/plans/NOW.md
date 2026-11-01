@@ -1,6 +1,6 @@
 # Current plan
 
-PV-UX-LOOPS-020 is active: complete20 concrete verified improvements, then finish. [Loop ledger and evidence](../HILL-CLIMB-20.md):0/20 complete, first10 authored, CI pending. Native9b26363 passed22 workflows then failed duplicated Chat navigation before Lisbon/release/performance. All21 captures inspected and120 transport hashes matched. Supported disposal933b0e13881c4c1bad8eb351c0bca5bd remains recovery-busy with no guest request, including one same-request resume; preserve inputs/guards/reservation, no new native dispatch or bypass. Continue source/CI independently.
+PV-UX-LOOPS-020 is active: complete20 concrete verified improvements, then finish. [Loop ledger and evidence](../HILL-CLIMB-20.md):7/20 renderer-verified at7ec68a2; loops1–3 need native proof,11–20 are authored with newCI/native pending. Native9b26363 passed22 workflows then failed duplicated Chat navigation before Lisbon/release/performance. All21 captures inspected and120 transport hashes matched. Supported disposal933b0e13881c4c1bad8eb351c0bca5bd completed01:19:13Z Boot35→36 with mechanical proof. Original exit1 remains; old input moved privately after receipt, guards retained. Fresh successful CI/source authentication and admission are required before the next native run.
 
 ## Earlier Open Canvas checkpoint
 

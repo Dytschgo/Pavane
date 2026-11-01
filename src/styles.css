@@ -1907,3 +1907,26 @@ p {
 .welcome-connect {
   margin-block-start: 20px;
 }
+
+.picker-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 10px;
+  padding-inline: 12px;
+  border-block-end: 1px solid var(--border);
+}
+.picker-selection p {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.picker-option[aria-disabled="true"] {
+  color: var(--subtle-foreground);
+}
+
+.picker-search,
+.picker-bottom {
+  flex: none;
+}

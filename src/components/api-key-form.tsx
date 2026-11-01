@@ -2,6 +2,7 @@ import { ExternalLink, KeyRound, LoaderCircle, Trash2 } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
+import { pasteWholeKey } from "../lib/key-paste";
 
 type KeyProvider = "gemini" | "xai";
 
@@ -104,6 +105,13 @@ export function ApiKeyForm({
           setError(null);
           setNotice(null);
         }}
+        onPaste={(event) =>
+          pasteWholeKey(event, (value) => {
+            setKey(value);
+            setError(null);
+            setNotice(null);
+          })
+        }
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}

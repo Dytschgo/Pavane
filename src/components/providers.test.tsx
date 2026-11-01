@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Providers } from "./providers";
 
@@ -56,4 +62,98 @@ it("keeps one recheck action available after failure and disables it during disc
   expect(
     screen.getByRole("button", { name: "Recheck connections" }),
   ).toBeEnabled();
+});
+
+it("distinguishes unavailable services, missing keys and required sign-in", () => {
+  render(
+    <Providers
+      models={[]}
+      providers={[
+        {
+          id: "ollama",
+          name: "Ollama",
+          state: "unavailable",
+          detail: "Start Ollama",
+          limits: [],
+        },
+        {
+          id: "gemini",
+          name: "Gemini",
+          state: "needsKey",
+          detail: "Add a key",
+          limits: [],
+        },
+        {
+          id: "codex",
+          name: "Codex",
+          state: "signedOut",
+          detail: "Sign in",
+          limits: [],
+        },
+      ]}
+      busy={false}
+      onRefresh={vi.fn()}
+      error={null}
+    />,
+  );
+  expect(
+    within(screen.getByRole("button", { name: "Manage Ollama" })).getByText(
+      "Needs attention",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("button", { name: "Manage Gemini API" })).getByText(
+      "Add API key",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    within(screen.getByRole("button", { name: "Manage Codex" })).getByText(
+      "Sign in needed",
+    ),
+  ).toBeInTheDocument();
+});
+
+it("explains a connected Ollama with no models without asking for another connection", () => {
+  const { rerender } = render(
+    <Providers
+      initialProvider="ollama"
+      models={[]}
+      providers={[
+        {
+          id: "ollama",
+          name: "Ollama",
+          state: "connected",
+          detail: "0 local models",
+          limits: [],
+        },
+      ]}
+      busy={false}
+      onRefresh={vi.fn()}
+      error={null}
+    />,
+  );
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Add a text model in Ollama, then recheck connections.",
+  );
+  expect(screen.queryByText("0 local models")).toBeNull();
+  rerender(
+    <Providers
+      initialProvider="ollama"
+      models={[{ id: "ollama:local", name: "Local", provider: "Ollama" }]}
+      providers={[
+        {
+          id: "ollama",
+          name: "Ollama",
+          state: "connected",
+          detail: "1 local model",
+          limits: [],
+        },
+      ]}
+      busy={false}
+      onRefresh={vi.fn()}
+      error={null}
+    />,
+  );
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByText("1 local model")).toBeInTheDocument();
 });

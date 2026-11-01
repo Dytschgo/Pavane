@@ -99,6 +99,17 @@ export function App() {
   const [providerError, setProviderError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const newChatInFlight = useRef(false);
+  const keepInFlight = useRef(new Set<string>());
+  const [keepingId, setKeepingId] = useState<string | null>(null);
+  const workspaceCreateInFlight = useRef(false);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [workspaceCreateError, setWorkspaceCreateError] = useState<
+    string | null
+  >(null);
+  const deleteInFlight = useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const sendInFlight = useRef(false);
   const retrySend = useRef<(message: Message) => Promise<void>>(async () => {});
   const [loading, setLoading] = useState(true);
@@ -429,6 +440,7 @@ export function App() {
 
   const createChat = useCallback(
     async (deleteSoon = false) => {
+      if (busy || newChatInFlight.current) return;
       if (
         current &&
         messages.length === 0 &&
@@ -439,6 +451,8 @@ export function App() {
         composer.current?.focus();
         return;
       }
+      newChatInFlight.current = true;
+      setError(null);
       setBusy(true);
       try {
         const chat = await api.createChat(deleteSoon, workspaceId);
@@ -448,10 +462,20 @@ export function App() {
       } catch (failure) {
         report(failure);
       } finally {
+        newChatInFlight.current = false;
         setBusy(false);
       }
     },
-    [workspaceId, refresh, openChat, report, current, messages.length, draft],
+    [
+      workspaceId,
+      refresh,
+      openChat,
+      report,
+      current,
+      messages.length,
+      draft,
+      busy,
+    ],
   );
 
   useEffect(() => {
@@ -872,25 +896,47 @@ export function App() {
 
   async function saveWorkspace(event: FormEvent) {
     event.preventDefault();
-    if (!createKind) return;
+    if (!createKind || !workspaceName.trim() || workspaceCreateInFlight.current)
+      return;
+    workspaceCreateInFlight.current = true;
+    setCreatingWorkspace(true);
+    setWorkspaceCreateError(null);
     setBusy(true);
+    let created: Workspace | null = null;
     try {
       const saved = await api.createWorkspace(
         createKind,
-        workspaceName,
+        workspaceName.trim(),
         instructions,
       );
-      setWorkspaces((previous) => [...previous, saved]);
-      setWorkspaceId(saved.id);
+      created = saved;
+      setWorkspaces((previous) =>
+        previous.some((item) => item.id === saved.id)
+          ? previous
+          : [...previous, saved],
+      );
       const firstChat = await api.createChat(false, saved.id);
       await refresh();
       await openChat(firstChat);
       setCreateKind(null);
       setWorkspaceName("");
       setInstructions("");
-    } catch (failure) {
-      report(failure);
+    } catch {
+      if (created) {
+        setCreateKind(null);
+        setWorkspaceName("");
+        setInstructions("");
+        report(
+          `“${created.name}” was created, but its chat could not be opened. Open the saved workspace to continue.`,
+        );
+      } else {
+        setWorkspaceCreateError(
+          "Couldn’t create this workspace. Your entries are still here. Try again.",
+        );
+      }
     } finally {
+      workspaceCreateInFlight.current = false;
+      setCreatingWorkspace(false);
       setBusy(false);
     }
   }
@@ -902,19 +948,70 @@ export function App() {
   }
 
   async function keepChat(id: string) {
-    await api.keep(id);
-    setSelectedChat((previous) =>
-      previous?.id === id ? { ...previous, expiresAt: null } : previous,
-    );
-    setChats((previous) =>
-      previous.map((chat) =>
-        chat.id === id ? { ...chat, expiresAt: null } : chat,
-      ),
-    );
-    await refresh();
+    if (keepInFlight.current.has(id)) return;
+    keepInFlight.current.add(id);
+    setError(null);
+    setKeepingId(id);
+    try {
+      await api.keep(id);
+      setSelectedChat((previous) =>
+        previous?.id === id ? { ...previous, expiresAt: null } : previous,
+      );
+      setChats((previous) =>
+        previous.map((chat) =>
+          chat.id === id ? { ...chat, expiresAt: null } : chat,
+        ),
+      );
+      await refresh();
+    } finally {
+      keepInFlight.current.delete(id);
+      setKeepingId((previous) => (previous === id ? null : previous));
+    }
+  }
+
+  async function deleteChat() {
+    if (!deleteId || deleteInFlight.current) return;
+    const target = deleteId;
+    deleteInFlight.current = true;
+    setDeleting(true);
+    setDeleteError(null);
+    let deleted = false;
+    try {
+      await api.delete(target);
+      deleted = true;
+      setChats((previous) => previous.filter((chat) => chat.id !== target));
+      setSidebar(false);
+      setDeleteId(null);
+      if (currentRef.current === target) {
+        ++selection.current;
+        currentRef.current = null;
+        setCurrentId(null);
+        setSelectedChat(null);
+        setMessages([]);
+        setDraft("");
+        setLoading(true);
+        const replacement = await api.createChat(false, workspaceId);
+        await openChat(replacement);
+      }
+      await refresh();
+    } catch {
+      if (deleted) {
+        setLoading(false);
+        report(
+          "The chat was deleted. Couldn’t open a replacement chat. Choose New chat to continue.",
+        );
+      } else
+        setDeleteError(
+          "Couldn’t delete this chat. It’s still here. Try again.",
+        );
+    } finally {
+      deleteInFlight.current = false;
+      setDeleting(false);
+    }
   }
 
   async function openWorkspace(item: Workspace) {
+    setError(null);
     setBusy(true);
     try {
       const chat =
@@ -996,7 +1093,10 @@ export function App() {
               <Menu.Separator className="menu-separator" />
               <Menu.Item
                 className="menu-item destructive"
-                onSelect={() => setDeleteId(chat.id)}
+                onSelect={() => {
+                  setDeleteError(null);
+                  setDeleteId(chat.id);
+                }}
               >
                 <Trash2 size={14} />
                 Delete chat
@@ -1229,9 +1329,11 @@ export function App() {
                     </span>
                     <button
                       aria-label="Keep this chat"
+                      aria-busy={keepingId === current.id}
+                      disabled={keepingId === current.id}
                       onClick={() => void keepChat(current.id).catch(report)}
                     >
-                      Keep
+                      {keepingId === current.id ? "Keeping…" : "Keep"}
                     </button>
                   </div>
                 )}
@@ -1533,7 +1635,11 @@ export function App() {
                   </div>
                   <Button
                     variant="primary"
-                    onClick={() => setCreateKind(view as Workspace["kind"])}
+                    disabled={busy}
+                    onClick={() => {
+                      setWorkspaceCreateError(null);
+                      setCreateKind(view as Workspace["kind"]);
+                    }}
                   >
                     <Plus size={16} />
                     New{" "}
@@ -1616,42 +1722,34 @@ export function App() {
         </Modal>
         <Modal
           open={!!deleteId}
+          dismissible={!deleting}
           onOpenChange={(open) => {
-            if (!open) setDeleteId(null);
+            if (!open && !deleteInFlight.current) {
+              setDeleteId(null);
+              setDeleteError(null);
+            }
           }}
           title="Delete this chat?"
           description="This removes the conversation from this device. It cannot be undone."
         >
+          {deleteError && (
+            <p className="field-error" role="alert">
+              {deleteError}
+            </p>
+          )}
           <div className="dialog-actions">
-            <Button onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button disabled={deleting} onClick={() => setDeleteId(null)}>
+              Cancel
+            </Button>
             <Button
               variant="danger"
-              onClick={() => {
-                if (!deleteId) return;
-                void api
-                  .delete(deleteId)
-                  .then(async () => {
-                    if (currentRef.current === deleteId) {
-                      ++selection.current;
-                      currentRef.current = null;
-                      setCurrentId(null);
-                      setMessages([]);
-                      setDraft("");
-                      setLoading(true);
-                      const replacement = await api.createChat(
-                        false,
-                        workspaceId,
-                      );
-                      await openChat(replacement);
-                    }
-                    setDeleteId(null);
-                    await refresh();
-                  })
-                  .catch(report);
-              }}
+              aria-label="Delete chat"
+              aria-busy={deleting}
+              disabled={deleting}
+              onClick={() => void deleteChat()}
             >
               <Trash2 size={15} />
-              Delete chat
+              {deleting ? "Deleting…" : "Delete chat"}
             </Button>
           </div>
         </Modal>
@@ -1699,19 +1797,29 @@ export function App() {
         )}
         <Modal
           open={!!createKind}
+          dismissible={!creatingWorkspace}
           onOpenChange={(open) => {
-            if (!open) setCreateKind(null);
+            if (!open && !workspaceCreateInFlight.current) setCreateKind(null);
           }}
           title={`New ${createKind === "bots" ? "bot" : createKind === "spaces" ? "space" : "project"}`}
           description="A dedicated place for conversations and shared instructions."
         >
-          <form onSubmit={(event) => void saveWorkspace(event)}>
+          <form
+            aria-busy={creatingWorkspace}
+            onSubmit={(event) => void saveWorkspace(event)}
+          >
+            {workspaceCreateError && (
+              <p className="field-error" role="alert">
+                {workspaceCreateError}
+              </p>
+            )}
             <label className="field-label" htmlFor="workspace-name">
               Name
             </label>
             <input
               className="text-input"
               id="workspace-name"
+              readOnly={creatingWorkspace}
               value={workspaceName}
               maxLength={80}
               onChange={(event) => setWorkspaceName(event.target.value)}
@@ -1723,13 +1831,18 @@ export function App() {
             <textarea
               className="text-input instructions-input"
               id="instructions"
+              readOnly={creatingWorkspace}
               placeholder="How should the assistant work here?"
               value={instructions}
               maxLength={8192}
               onChange={(event) => setInstructions(event.target.value)}
             />
             <div className="dialog-actions">
-              <Button type="button" onClick={() => setCreateKind(null)}>
+              <Button
+                type="button"
+                disabled={creatingWorkspace}
+                onClick={() => setCreateKind(null)}
+              >
                 Cancel
               </Button>
               <Button
@@ -1737,7 +1850,7 @@ export function App() {
                 type="submit"
                 disabled={busy || !workspaceName.trim()}
               >
-                Create
+                {creatingWorkspace ? "Creating…" : "Create"}
               </Button>
             </div>
           </form>

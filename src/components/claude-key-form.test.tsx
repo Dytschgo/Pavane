@@ -153,3 +153,18 @@ it("opens only the static Console URL without submitting either field", async ()
   );
   expect(api.saveClaudeConnection).not.toHaveBeenCalled();
 });
+
+it("normalizes outer clipboard whitespace without exposing the masked key", async () => {
+  api.saveClaudeConnection.mockResolvedValue(undefined);
+  render(<ClaudeKeyForm onChanged={changed} />);
+  const input = screen.getByLabelText("Claude API key");
+  (input as HTMLInputElement).setSelectionRange(0, 0);
+  fireEvent.paste(input, { clipboardData: { getData: () => `  ${KEY}\r\n` } });
+  expect(input).toHaveValue(KEY);
+  expect(input).toHaveAttribute("type", "password");
+  fireEvent.click(screen.getByRole("button", { name: "Save connection" }));
+  await waitFor(() =>
+    expect(api.saveClaudeConnection).toHaveBeenCalledWith(KEY, null),
+  );
+  expect(screen.queryByText(KEY)).toBeNull();
+});

@@ -122,6 +122,13 @@ export function ModelPicker({
     onOpenChange(false);
   }
   function choose(model: Model, single = false) {
+    if (
+      !single &&
+      preferences.compare &&
+      preferences.selected.length >= 4 &&
+      !preferences.selected.includes(model.id)
+    )
+      return;
     update((previous) => ({
       ...previous,
       compare: single ? false : previous.compare,
@@ -135,6 +142,12 @@ export function ModelPicker({
     if (!preferences.compare || single) finishSelection();
   }
   function setting(model: Model, effort?: string, tier?: string) {
+    if (
+      preferences.compare &&
+      preferences.selected.length >= 4 &&
+      !preferences.selected.includes(model.id)
+    )
+      return;
     update((previous) => ({
       ...previous,
       selected: previous.compare
@@ -226,6 +239,10 @@ export function ModelPicker({
             }
           }}
           onEscapeKeyDown={(event) => {
+            if (event.isComposing) {
+              event.preventDefault();
+              return;
+            }
             if (details) {
               event.preventDefault();
               setDetails(null);
@@ -400,6 +417,17 @@ export function ModelPicker({
                           ref={index === row ? activeOption : undefined}
                           tabIndex={-1}
                           aria-selected={chosen}
+                          aria-disabled={
+                            (preferences.compare &&
+                              preferences.selected.length >= 4 &&
+                              !chosen) ||
+                            undefined
+                          }
+                          aria-describedby={
+                            preferences.compare
+                              ? `${listId}-selection`
+                              : undefined
+                          }
                           aria-keyshortcuts={
                             shortcut > 0 && shortcut < 10
                               ? `Control+${shortcut}`
@@ -588,6 +616,24 @@ export function ModelPicker({
               })}
             </div>
             <div className="picker-bottom">
+              {preferences.compare && (
+                <div className="picker-selection">
+                  <p id={`${listId}-selection`} role="status">
+                    {preferences.selected.length === 0
+                      ? "Choose at least one model."
+                      : preferences.selected.length >= 4
+                        ? "4 of 4 selected. Unselect one to add another."
+                        : `${preferences.selected.length} of 4 selected`}
+                  </p>
+                  <Button
+                    size="small"
+                    disabled={preferences.selected.length === 0}
+                    onClick={finishSelection}
+                  >
+                    Done
+                  </Button>
+                </div>
+              )}
               <button
                 className="picker-compare"
                 aria-pressed={preferences.compare}

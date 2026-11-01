@@ -1500,3 +1500,216 @@ it("keeps navigation search open during IME Escape and dismisses on ordinary Esc
   await user.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
+
+it("keeps one native Keep request pending and offers retry after failure", async () => {
+  let rejectKeep!: (failure: Error) => void;
+  const temporary = { ...first, expiresAt: Date.now() + 30 * 86_400_000 };
+  mocked.listChats.mockResolvedValue([temporary, second]);
+  mocked.keep.mockReturnValueOnce(
+    new Promise<void>((_resolve, reject) => {
+      rejectKeep = reject;
+    }),
+  );
+  render(<App />);
+  const keep = await screen.findByRole("button", { name: "Keep this chat" });
+  fireEvent.click(keep);
+  fireEvent.click(keep);
+  expect(mocked.keep).toHaveBeenCalledTimes(1);
+  expect(keep).toBeDisabled();
+  expect(keep).toHaveAttribute("aria-busy", "true");
+  await act(async () => rejectKeep(new Error("Synthetic Keep failure")));
+  await screen.findByRole("alert");
+  expect(keep).toBeEnabled();
+  mocked.keep.mockImplementation(async () => {
+    mocked.listChats.mockResolvedValue([first, second]);
+  });
+  fireEvent.click(keep);
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Keep this chat" })).toBeNull(),
+  );
+  expect(mocked.keep).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("serializes new-chat shortcuts and keeps the previous draft after failed creation", async () => {
+  let rejectCreate!: (failure: Error) => void;
+  mocked.draft.mockImplementation((id: string) =>
+    Promise.resolve(id === first.id ? "Previous draft" : ""),
+  );
+  mocked.createChat
+    .mockReturnValueOnce(
+      new Promise<Chat>((_resolve, reject) => {
+        rejectCreate = reject;
+      }),
+    )
+    .mockResolvedValue(second);
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Previous draft"));
+  fireEvent.keyDown(window, { key: "o", ctrlKey: true, shiftKey: true });
+  fireEvent.keyDown(window, { key: "o", ctrlKey: true, shiftKey: true });
+  expect(mocked.createChat).toHaveBeenCalledTimes(1);
+  await act(async () => rejectCreate(new Error("Synthetic create failure")));
+  await screen.findByRole("alert");
+  expect(editor).toHaveValue("Previous draft");
+  fireEvent.keyDown(window, { key: "o", ctrlKey: true, shiftKey: true });
+  await waitFor(() => expect(mocked.createChat).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(editor).toHaveValue(""));
+});
+
+it("freezes one workspace submission and retains failed name/instructions for retry", async () => {
+  let rejectCreate!: (failure: Error) => void;
+  mocked.createWorkspace.mockReturnValue(
+    new Promise((_resolve, reject) => {
+      rejectCreate = reject;
+    }),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  await openNavigation();
+  fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+  fireEvent.click(await screen.findByRole("button", { name: "New project" }));
+  const dialog = screen.getByRole("dialog", { name: "New project" });
+  const name = within(dialog).getByRole("textbox", { name: "Name" });
+  const instructions = within(dialog).getByRole("textbox", {
+    name: /Instructions/,
+  });
+  fireEvent.change(name, { target: { value: "My project" } });
+  fireEvent.change(instructions, { target: { value: "Keep these rules" } });
+  const form = name.closest("form")!;
+  fireEvent.submit(form);
+  fireEvent.submit(form);
+  expect(mocked.createWorkspace).toHaveBeenCalledTimes(1);
+  expect(name).toHaveAttribute("readonly");
+  expect(instructions).toHaveAttribute("readonly");
+  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+  expect(
+    within(dialog).getByRole("button", { name: "Close dialog" }),
+  ).toBeDisabled();
+  await user.keyboard("{Escape}");
+  expect(dialog).toBeInTheDocument();
+  await act(async () => rejectCreate(new Error("Synthetic workspace failure")));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+    "Your entries are still here",
+  );
+  expect(name).toHaveValue("My project");
+  expect(instructions).toHaveValue("Keep these rules");
+  expect(within(dialog).getByRole("button", { name: "Create" })).toBeEnabled();
+  expect(mocked.createChat).not.toHaveBeenCalled();
+});
+
+it("recovers a saved workspace whose first chat fails without creating the workspace again", async () => {
+  const saved = {
+    id: "saved-project",
+    kind: "projects",
+    name: "Saved project",
+    instructions: "Rules",
+  };
+  mocked.createWorkspace.mockResolvedValue(saved);
+  mocked.createChat.mockRejectedValueOnce(
+    new Error("Synthetic first chat failure"),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  await openNavigation();
+  fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+  fireEvent.click(await screen.findByRole("button", { name: "New project" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    target: { value: "Saved project" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "was created, but its chat could not be opened",
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument();
+  const linked = { ...second, workspaceId: saved.id };
+  mocked.createChat.mockResolvedValue(linked);
+  mocked.listChats.mockResolvedValue([first, linked]);
+  await user.click(screen.getByRole("button", { name: /Saved project/ }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Edit name and instructions" }),
+    ).toBeInTheDocument(),
+  );
+  expect(mocked.createWorkspace).toHaveBeenCalledTimes(1);
+  expect(mocked.createChat).toHaveBeenLastCalledWith(false, saved.id);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("serializes failed deletion, preserves the current draft, and retries only the chosen chat", async () => {
+  let rejectDelete!: (failure: Error) => void;
+  mocked.draft.mockResolvedValue("Keep my current draft");
+  mocked.delete.mockReturnValueOnce(
+    new Promise<void>((_resolve, reject) => {
+      rejectDelete = reject;
+    }),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Keep my current draft"));
+  await openNavigation();
+  await user.click(
+    screen.getByRole("button", { name: "Options for Second conversation" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "Delete chat" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Delete this chat?",
+  });
+  const confirm = within(dialog).getByRole("button", { name: "Delete chat" });
+  fireEvent.click(confirm);
+  fireEvent.click(confirm);
+  expect(mocked.delete).toHaveBeenCalledTimes(1);
+  expect(mocked.delete).toHaveBeenCalledWith(second.id);
+  expect(confirm).toBeDisabled();
+  expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+  await user.keyboard("{Escape}");
+  expect(dialog).toBeInTheDocument();
+  await act(async () => rejectDelete(new Error("Synthetic delete failure")));
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+    "It’s still here",
+  );
+  expect(confirm).toBeEnabled();
+  mocked.delete.mockResolvedValue(undefined);
+  mocked.listChats.mockResolvedValue([first]);
+  fireEvent.click(confirm);
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(editor).toHaveValue("Keep my current draft");
+  expect(mocked.delete).toHaveBeenCalledTimes(2);
+  expect(mocked.createChat).not.toHaveBeenCalled();
+});
+
+it("does not repeat acknowledged deletion when replacement chat creation fails", async () => {
+  mocked.delete.mockResolvedValue(undefined);
+  mocked.createChat.mockRejectedValueOnce(
+    new Error("Synthetic replacement failure"),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  await openNavigation();
+  await user.click(
+    screen.getByRole("button", { name: "Options for First conversation" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "Delete chat" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Delete this chat?",
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete chat" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The chat was deleted",
+  );
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(mocked.delete).toHaveBeenCalledTimes(1);
+  mocked.createChat.mockResolvedValue(second);
+  mocked.listChats.mockResolvedValue([second]);
+  fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+  await waitFor(() => expect(editor).toBeEnabled());
+  expect(mocked.delete).toHaveBeenCalledTimes(1);
+});

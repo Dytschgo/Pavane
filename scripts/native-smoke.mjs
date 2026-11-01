@@ -42,11 +42,20 @@ const requests = [];
 const selectiveStreams = new Map();
 let selectiveStopEvidence = null;
 let recoveryAttempts = 0;
+let offerModels = false;
+let comparisonModels = false;
 const mock = createServer(async (request, response) => {
   if (request.url === "/api/tags") {
     response.setHeader("content-type", "application/json");
     response.end(
-      JSON.stringify({ models: [{ name: "smoke-a" }, { name: "smoke-b" }] }),
+      JSON.stringify({
+        models: offerModels
+          ? (comparisonModels
+              ? ["smoke-a", "smoke-b", "smoke-c", "smoke-d", "smoke-e"]
+              : ["smoke-a", "smoke-b"]
+            ).map((name) => ({ name }))
+          : [],
+      }),
     );
     return;
   }
@@ -180,10 +189,78 @@ async function close() {
   }
   child = undefined;
 }
+async function pasteSyntheticKey(input) {
+  await input.evaluate((element) => {
+    element.focus();
+    element.setSelectionRange(0, element.value.length);
+    const data = new DataTransfer();
+    data.setData("text", "  synthetic-not-saved-key\r\n");
+    element.dispatchEvent(
+      new ClipboardEvent("paste", {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  assert.equal(await input.inputValue(), "synthetic-not-saved-key");
+  assert.equal(await input.getAttribute("type"), "password");
+}
 const checks = [];
 try {
   let page = await launch();
+  await page
+    .getByRole("button", { name: "Connect a model", exact: true })
+    .waitFor({ timeout: 45000 });
   await page.screenshot({ path: join(evidence, "native-empty.png") });
+  const setupEditor = page.getByRole("textbox", {
+    name: "Message",
+    exact: true,
+  });
+  const setupDraft = "My first question survives setup";
+  await setupEditor.fill(setupDraft);
+  await page
+    .getByRole("button", { name: "Connect a model", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Manage Ollama", exact: true })
+    .click();
+  await page
+    .getByRole("status")
+    .filter({ hasText: "Add a text model in Ollama" })
+    .waitFor();
+  await page.screenshot({
+    path: join(evidence, "native-first-connection.png"),
+  });
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  assert.equal(await setupEditor.inputValue(), setupDraft);
+  await setupEditor.press("Enter");
+  await page
+    .getByRole("dialog", { name: "Your connections", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.getByRole("combobox", { name: "Search models" }).count(),
+    0,
+  );
+  assert.equal(
+    requests.length,
+    0,
+    "No-model send must open setup without sending",
+  );
+  offerModels = true;
+  await page
+    .getByRole("button", { name: "Recheck connections", exact: true })
+    .click();
+  await page.getByText("2 models ready", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  assert.equal(await setupEditor.inputValue(), setupDraft);
+  assert.equal(requests.length, 0);
+  await page.screenshot({
+    path: join(evidence, "native-first-connection-ready.png"),
+  });
+  checks.push(
+    "fresh empty-model profile reaches setup directly, explains connected Ollama without models, preserves draft through no-model send/recheck, and sends nothing until a model is ready",
+  );
   await page.getByRole("button", { name: /Change model/ }).click();
   await page
     .getByRole("option", { name: /smoke-a/ })
@@ -1041,6 +1118,7 @@ try {
     .getByRole("button", { name: "Manage Gemini API", exact: true })
     .click();
   const apiKey = page.getByLabel("Gemini API key", { exact: true });
+  await pasteSyntheticKey(apiKey);
   await page
     .getByText("API usage is billed separately from Gemini subscriptions.", {
       exact: true,
@@ -1080,6 +1158,7 @@ try {
     .getByRole("button", { name: "Manage Claude API", exact: true })
     .click();
   const claudeKey = page.getByLabel("Claude API key", { exact: true });
+  await pasteSyntheticKey(claudeKey);
   const claudeWorkspace = page.getByLabel("Workspace ID (optional)", {
     exact: true,
   });
@@ -1142,6 +1221,7 @@ try {
     .getByRole("button", { name: "Manage xAI API", exact: true })
     .click();
   const xaiKey = page.getByLabel("xAI API key", { exact: true });
+  await pasteSyntheticKey(xaiKey);
   await xaiKey.scrollIntoViewIfNeeded();
   assert.equal(await xaiKey.getAttribute("type"), "password");
   assert.equal(await xaiKey.inputValue(), "");
@@ -1308,6 +1388,140 @@ try {
   );
   checks.push(
     "Open Canvas has no persistent navigation/footer, keeps model choice at left, and preserves keyboard search/focus containment/dismissal at desktop and 480px",
+  );
+
+  const comparisonRequests = requests.length;
+  const comparisonDraft = "Keep this comparison draft";
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
+    .fill(comparisonDraft);
+  comparisonModels = true;
+  await openConnections(page);
+  await page
+    .getByRole("button", { name: "Recheck connections", exact: true })
+    .click();
+  await page.getByText("5 models ready", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: /Change model/ }).click();
+  const modelSearch = page.getByRole("combobox", {
+    name: "Search models",
+    exact: true,
+  });
+  await modelSearch.fill("smoke-");
+  await modelSearch.evaluate((element) =>
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  assert.equal(await modelSearch.inputValue(), "smoke-");
+  assert.equal(await modelSearch.isVisible(), true);
+  await page.keyboard.press("Escape");
+  assert.equal(
+    await page.getByRole("combobox", { name: "Search models" }).count(),
+    0,
+  );
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("button", { name: /Compare models/ }).click();
+  for (const name of ["smoke-b", "smoke-c", "smoke-d"])
+    await page.getByRole("option", { name: new RegExp(name) }).click();
+  assert.equal(await page.getByRole("option", { selected: true }).count(), 4);
+  await page
+    .getByText("4 of 4 selected. Unselect one to add another.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("option", { name: /smoke-e/ })
+      .getAttribute("aria-disabled"),
+    "true",
+  );
+  await page.getByRole("option", { name: /smoke-b/ }).click();
+  await page.getByRole("option", { name: /smoke-e/ }).click();
+  assert.equal(await page.getByRole("option", { selected: true }).count(), 4);
+  await page.screenshot({
+    path: join(evidence, "native-model-comparison.png"),
+  });
+  for (const name of ["smoke-a", "smoke-c", "smoke-d", "smoke-e"])
+    await page.getByRole("option", { name: new RegExp(name) }).click();
+  await page.getByText("Choose at least one model.", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "Done", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByRole("option", { name: /smoke-a/ }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole("textbox", { name: "Message", exact: true })
+      .inputValue(),
+    comparisonDraft,
+  );
+  await page.getByRole("button", { name: /Change model/ }).click();
+  await page.getByRole("button", { name: /Compare models/ }).click();
+  await page.getByRole("option", { name: /smoke-a/ }).click();
+  assert.equal(
+    requests.length,
+    comparisonRequests,
+    "Model controls must not send a message",
+  );
+  checks.push(
+    "native picker keeps IME search, explains the four-model limit, recovers an empty comparison and preserves the unsent draft without requests",
+  );
+  const beforeDeleteFixture = await page.evaluate(() =>
+    localStorage.getItem("pavane.selectedChat"),
+  );
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.waitForFunction(
+    (previous) => localStorage.getItem("pavane.selectedChat") !== previous,
+    beforeDeleteFixture,
+  );
+  const deleteTarget = await page.evaluate(() =>
+    localStorage.getItem("pavane.selectedChat"),
+  );
+  assert.ok(
+    deleteTarget,
+    "Deletion fixture must identify its exact selected chat",
+  );
+  await openNavigation(page);
+  await page.locator(".chat-row.selected .row-menu").click();
+  await page
+    .getByRole("menuitem", { name: "Delete chat", exact: true })
+    .click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "Delete this chat?",
+    exact: true,
+  });
+  await deleteDialog
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await page.locator(".chat-row.selected .row-menu").click();
+  await page
+    .getByRole("menuitem", { name: "Delete chat", exact: true })
+    .click();
+  await deleteDialog
+    .getByRole("button", { name: "Delete chat", exact: true })
+    .click();
+  await deleteDialog.waitFor({ state: "hidden" });
+  await page.getByRole("textbox", { name: "Message", exact: true }).waitFor();
+  await page.waitForFunction(() => !document.querySelector("#prompt").disabled);
+  const remaining = await page.evaluate(
+    async () =>
+      await window.__TAURI_INTERNALS__.invoke("list_chats", {
+        offset: 0,
+        search: "",
+      }),
+  );
+  assert.equal(
+    remaining.some((chat) => chat.id === deleteTarget),
+    false,
+  );
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  checks.push(
+    "native deletion preserves Cancel, removes only the confirmed synthetic chat, dismisses navigation and opens its replacement",
   );
 
   await writeFile(
