@@ -1362,6 +1362,12 @@ try {
   await page.screenshot({ path: join(evidence, "native-navigation.png") });
   await page.keyboard.press("Escape");
   await drawer.waitFor({ state: "hidden" });
+  // FocusScope dispatches close autofocus after unmount. Observe its result,
+  // rather than racing that callback as soon as the drawer leaves the DOM.
+  await page.waitForFunction(
+    () =>
+      document.activeElement?.getAttribute("aria-label") === "Open navigation",
+  );
   assert.equal(
     await page
       .getByRole("button", { name: "Open navigation", exact: true })
