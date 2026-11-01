@@ -205,6 +205,9 @@ async function pasteSyntheticKey(input) {
   });
   assert.equal(await input.inputValue(), "synthetic-not-saved-key");
   assert.equal(await input.getAttribute("type"), "password");
+  // Restore the empty field before the existing fresh-profile validation checks.
+  // This synthetic clipboard value must never reach a save action.
+  await input.fill("");
 }
 const checks = [];
 try {

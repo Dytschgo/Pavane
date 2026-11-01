@@ -1,5 +1,7 @@
 # Current handoff — 31 October 2026
 
+Current checkpoint:20 improvements authored,11/20 renderer-verified on24bc37e (124tests/14files; allCIgates passed). Native20261101T014352Z-daf6da69cc4d passed18 workflows then exposed a test setup error: a successfully pasted synthetic key was still present when the existing empty-field assertion ran. Clear that helper value after testing paste/masking; preserve all validation/removal assertions. All18 captures inspected and123transport/84CI source hashes matched. Final native/release/performance/Lisbon/comparison/delete proof remains open. Supported disposal72fbfc31f74f46f7be6b204466fd0945 is running; transport held until mechanical receipt. [Current exact ledger](../HILL-CLIMB-20.md) supersedes historical counts below.
+
 Active checkout: `D:/Code/Pavane-desktop`, branch `feat/desktop-foundation`, draft [PR #1](https://github.com/Dytschgo/Pavane/pull/1) against develop. Preserve the retired dirty `D:/Code/Pavane` checkout; append coordination facts only to its TASKS.md. License deferred; no merge, installer, public release or paid setup.
 
 ## Testing boundary
