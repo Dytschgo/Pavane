@@ -1713,3 +1713,33 @@ it("does not repeat acknowledged deletion when replacement chat creation fails",
   await waitFor(() => expect(editor).toBeEnabled());
   expect(mocked.delete).toHaveBeenCalledTimes(1);
 });
+
+it("distinguishes list refresh failure after deletion from replacement failure", async () => {
+  mocked.delete.mockResolvedValue(undefined);
+  mocked.draft.mockResolvedValue("Unrelated current draft");
+  const user = userEvent.setup();
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Unrelated current draft"));
+  await openNavigation();
+  await user.click(
+    screen.getByRole("button", { name: "Options for Second conversation" }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: "Delete chat" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Delete this chat?",
+  });
+  mocked.listChats.mockRejectedValueOnce(
+    new Error("Synthetic refresh failure"),
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete chat" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(
+    "The chat was deleted. The chat list could not be refreshed.",
+  );
+  expect(alert).not.toHaveTextContent("replacement");
+  expect(mocked.delete).toHaveBeenCalledTimes(1);
+  expect(mocked.createChat).not.toHaveBeenCalled();
+  expect(editor).toHaveValue("Unrelated current draft");
+  expect(screen.queryByRole("dialog")).toBeNull();
+});

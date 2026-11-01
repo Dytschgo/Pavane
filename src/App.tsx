@@ -976,6 +976,7 @@ export function App() {
     setDeleting(true);
     setDeleteError(null);
     let deleted = false;
+    let stage: "delete" | "replacement" | "refresh" = "delete";
     try {
       await api.delete(target);
       deleted = true;
@@ -983,6 +984,7 @@ export function App() {
       setSidebar(false);
       setDeleteId(null);
       if (currentRef.current === target) {
+        stage = "replacement";
         ++selection.current;
         currentRef.current = null;
         setCurrentId(null);
@@ -993,13 +995,18 @@ export function App() {
         const replacement = await api.createChat(false, workspaceId);
         await openChat(replacement);
       }
+      stage = "refresh";
       await refresh();
     } catch {
       if (deleted) {
-        setLoading(false);
-        report(
-          "The chat was deleted. Couldn’t open a replacement chat. Choose New chat to continue.",
-        );
+        if (stage === "replacement") {
+          setLoading(false);
+          report(
+            "The chat was deleted. Couldn’t open a replacement chat. Choose New chat to continue.",
+          );
+        } else {
+          report("The chat was deleted. The chat list could not be refreshed.");
+        }
       } else
         setDeleteError(
           "Couldn’t delete this chat. It’s still here. Try again.",
