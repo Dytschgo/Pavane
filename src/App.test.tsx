@@ -952,7 +952,7 @@ it("removing a Gemini key preserves its selection without falling back to anothe
   );
   fireEvent.click(
     await screen.findByRole("button", {
-      name: "Model: Model unavailable. Change model",
+      name: "Model: gemini-test (unavailable). Change model",
     }),
   );
   expect(
@@ -1028,7 +1028,7 @@ it("invalidates only Claude while discovery is pending and preserves its unavail
   await act(async () => finish(remaining));
   expect(
     await screen.findByRole("button", {
-      name: "Model: Model unavailable. Change model",
+      name: "Model: opaque-model-id (unavailable). Change model",
     }),
   ).toBeInTheDocument();
   expect(mocked.removeClaudeConnection).toHaveBeenCalledTimes(1);
@@ -1144,7 +1144,7 @@ it("invalidates only xAI while discovery is pending and preserves its unavailabl
   await act(async () => finish(remaining));
   expect(
     await screen.findByRole("button", {
-      name: "Model: Model unavailable. Change model",
+      name: "Model: opaque-model-id (unavailable). Change model",
     }),
   ).toBeInTheDocument();
   expect(mocked.removeXaiKey).toHaveBeenCalledTimes(1);
@@ -1349,4 +1349,154 @@ it("discloses temporary expiry before creation and keeps the new draft path reac
     await screen.findByRole("button", { name: "Keep this chat" }),
   ).toBeInTheDocument();
   expect(mocked.send).not.toHaveBeenCalled();
+});
+
+it("has one Chat route when a workspace conversation is selected", async () => {
+  mocked.workspaces.mockResolvedValue([
+    {
+      id: "project",
+      kind: "projects",
+      name: "Writing",
+      instructions: "Keep it clear",
+    },
+  ]);
+  mocked.listChats.mockResolvedValue([{ ...first, workspaceId: "project" }]);
+  mocked.draft.mockResolvedValue("Keep this workspace draft");
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("Keep this workspace draft"));
+  await openNavigation();
+  expect(screen.getAllByRole("button", { name: "Chat" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Chat" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(editor).toHaveValue("Keep this workspace draft");
+  expect(mocked.createChat).not.toHaveBeenCalled();
+});
+
+it("shows the workspace page title once after navigating", async () => {
+  render(<App />);
+  await screen.findByRole("textbox", { name: "Message" });
+  await openNavigation();
+  fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+  await screen.findByRole("heading", { name: "Projects" });
+  expect(screen.getAllByText("Projects")).toHaveLength(1);
+});
+
+it("connects a first model directly from the empty canvas without losing the draft", async () => {
+  mocked.draft.mockResolvedValue("My first question");
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toHaveValue("My first question"));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Connect a model" }),
+  );
+  await screen.findByRole("dialog", { name: "Your connections" });
+  fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(editor).toHaveValue("My first question");
+  expect(mocked.send).not.toHaveBeenCalled();
+});
+
+it("opens setup directly when sending with no available models", async () => {
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  await screen.findByRole("button", { name: "Connect a model" });
+  fireEvent.change(editor, { target: { value: "Please keep this question" } });
+  fireEvent.keyDown(editor, { key: "Enter" });
+  await screen.findByRole("dialog", { name: "Your connections" });
+  expect(screen.queryByRole("combobox", { name: "Search models" })).toBeNull();
+  expect(editor).toHaveValue("Please keep this question");
+  expect(mocked.send).not.toHaveBeenCalled();
+});
+
+it("leaves navigation and chat creation alone during IME shortcut composition", async () => {
+  render(<App />);
+  const editor = await screen.findByRole("textbox", { name: "Message" });
+  await waitFor(() => expect(editor).toBeEnabled());
+  fireEvent.change(editor, { target: { value: "Draft in progress" } });
+  fireEvent.keyDown(editor, { key: "k", ctrlKey: true, isComposing: true });
+  fireEvent.keyDown(editor, {
+    key: "o",
+    ctrlKey: true,
+    shiftKey: true,
+    isComposing: true,
+  });
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(mocked.createChat).not.toHaveBeenCalled();
+  expect(editor).toHaveValue("Draft in progress");
+});
+
+it("does not switch a favourite model behind modal navigation", async () => {
+  const catalog = connectSol();
+  mocked.catalog.mockResolvedValue({
+    ...catalog,
+    models: [
+      ...catalog.models,
+      { id: "ollama:other", name: "Other", provider: "Ollama" },
+    ],
+  });
+  localStorage.setItem(
+    "pavane.models.v1",
+    JSON.stringify({
+      selected: ["codex:sol"],
+      favourites: ["ollama:other"],
+      options: {},
+      compare: false,
+    }),
+  );
+  render(<App />);
+  await screen.findByRole("button", { name: "Model: Sol, Low. Change model" });
+  await openNavigation();
+  fireEvent.keyDown(window, { key: "1", ctrlKey: true });
+  expect(
+    JSON.parse(localStorage.getItem("pavane.models.v1")!).selected,
+  ).toEqual(["codex:sol"]);
+});
+
+it("returns focus when closing chat search", async () => {
+  render(<App />);
+  await screen.findByRole("textbox", { name: "Message" });
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  const search = await screen.findByRole("textbox", {
+    name: "Search chat titles",
+  });
+  await waitFor(() => expect(search).toHaveFocus());
+  fireEvent.click(screen.getByRole("button", { name: "Close search" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Search chats" })).toHaveFocus(),
+  );
+  expect(
+    screen.queryByRole("textbox", { name: "Search chat titles" }),
+  ).toBeNull();
+});
+
+it("refocuses an existing chat search on Ctrl+K without clearing its query", async () => {
+  render(<App />);
+  await screen.findByRole("textbox", { name: "Message" });
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  const search = await screen.findByRole("textbox", {
+    name: "Search chat titles",
+  });
+  fireEvent.change(search, { target: { value: "conversation" } });
+  screen.getByRole("button", { name: "Close search" }).focus();
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  await waitFor(() => expect(search).toHaveFocus());
+  expect(search).toHaveValue("conversation");
+});
+
+it("keeps navigation search open during IME Escape and dismisses on ordinary Escape", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("textbox", { name: "Message" });
+  fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+  const search = await screen.findByRole("textbox", {
+    name: "Search chat titles",
+  });
+  fireEvent.change(search, { target: { value: "unfinished text" } });
+  fireEvent.keyDown(search, { key: "Escape", isComposing: true });
+  expect(screen.getByRole("dialog", { name: "Chats" })).toBeInTheDocument();
+  expect(search).toHaveValue("unfinished text");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });

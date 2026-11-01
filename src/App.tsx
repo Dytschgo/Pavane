@@ -13,7 +13,6 @@ import {
   ArrowUp,
   Bot,
   ChevronDown,
-  ChevronLeft,
   Clock3,
   Folder,
   HardDrive,
@@ -137,6 +136,7 @@ export function App() {
   const workspaceEditButton = useRef<HTMLButtonElement>(null);
   const navigationTrigger = useRef<HTMLButtonElement>(null);
   const chatSearch = useRef<HTMLInputElement>(null);
+  const searchTrigger = useRef<HTMLButtonElement>(null);
   const drawerFocus = useRef<"trigger" | "composer">("trigger");
   const sidebarOpen = useRef(sidebar);
   useLayoutEffect(() => {
@@ -457,6 +457,7 @@ export function App() {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (
+        event.isComposing ||
         editingWorkspace ||
         settings ||
         renameId ||
@@ -469,6 +470,7 @@ export function App() {
         event.preventDefault();
         setSidebar(true);
         setSearching(true);
+        requestAnimationFrame(() => chatSearch.current?.focus());
       }
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -601,7 +603,9 @@ export function App() {
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if (
+        event.isComposing ||
         event.defaultPrevented ||
+        sidebar ||
         pickerOpen ||
         settings ||
         searching ||
@@ -631,6 +635,7 @@ export function App() {
     models,
     updatePreferences,
     focusComposer,
+    sidebar,
     pickerOpen,
     settings,
     searching,
@@ -663,7 +668,8 @@ export function App() {
         report(
           "Reconnect this model, then try the response again. Your draft is safe.",
         );
-      } else setPickerOpen(true);
+      } else if (models.length === 0) setSettings(true);
+      else setPickerOpen(true);
       return;
     }
     if (
@@ -1011,6 +1017,9 @@ export function App() {
             <Dialog.Content
               className="sidebar navigation-drawer"
               aria-describedby={undefined}
+              onEscapeKeyDown={(event) => {
+                if (event.isComposing) event.preventDefault();
+              }}
               onOpenAutoFocus={(event) => {
                 if (searching) {
                   event.preventDefault();
@@ -1039,6 +1048,7 @@ export function App() {
                       variant="ghost"
                       size="icon"
                       aria-label="Search chats"
+                      ref={searchTrigger}
                       onClick={() => setSearching((value) => !value)}
                     >
                       <Search size={17} />
@@ -1073,6 +1083,9 @@ export function App() {
                     onClick={() => {
                       setSearching(false);
                       setQuery("");
+                      requestAnimationFrame(() =>
+                        searchTrigger.current?.focus(),
+                      );
                     }}
                   >
                     <X size={14} />
@@ -1138,15 +1151,6 @@ export function App() {
                 ))}
               </nav>
               <div className="sidebar-scroll">
-                {workspace && (
-                  <button
-                    className="workspace-back"
-                    onClick={() => setWorkspaceId(null)}
-                  >
-                    <ChevronLeft size={14} />
-                    {viewInfo.label}
-                  </button>
-                )}
                 <div className="list-label">
                   <span className="list-title" title={workspace?.name}>
                     {workspace ? workspace.name : "Recent chats"}
@@ -1201,7 +1205,7 @@ export function App() {
               </Dialog.Trigger>
               <div className="header-location">
                 <span className="header-title">
-                  {showChat ? (current?.title ?? "New chat") : viewInfo.label}
+                  {showChat ? (current?.title ?? "New chat") : ""}
                 </span>
                 {workspace && (
                   <Tip label="Edit name and instructions">
@@ -1330,6 +1334,15 @@ export function App() {
                   ) : messages.length === 0 ? (
                     <div className="welcome">
                       <h1>What’s on your mind?</h1>
+                      {native && !connecting && models.length === 0 && (
+                        <Button
+                          className="welcome-connect"
+                          onClick={() => setSettings(true)}
+                        >
+                          <Plus size={16} />
+                          Connect a model
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="message-list" ref={messageList}>

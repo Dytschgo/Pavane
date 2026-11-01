@@ -6,7 +6,13 @@ Active checkout: `D:/Code/Pavane-desktop`, branch `feat/desktop-foundation`, dra
 
 Dylan prohibits app tests, builds, benchmarks and UI on this PC. Source edits/formatting, read-only review, artifact/hash inspection and private MCP orchestration are allowed. Use CI builds and the supported Windows lab. The old local target/release/pavane.exe remains unchanged and unlaunched, SHA256 `a1295414bca0583051bb8691ba8c23993223d1c1d2dfa51d02c3d66fd7cc1a26`. Guest Node 22.23.3/pnpm 11.25.0 are available; Cargo is absent. Use authenticated CI prebuilt inputs, no tool installation or host build. No LiveCodex baseline or auth transfer.
 
-## Open Canvas — implementation source checkpoint
+## Active20-loop hill climb — 1 November
+
+Dylan requested20 loops of improvements, then stop. Active goal remains open. [Exact loop count, authored work, verification and recovery custody](../HILL-CLIMB-20.md). Current count0/20 verified; first10 authored. Preserve selected R3-B Open Canvas and prior scope. Native9b26363 failed after22 workflows at a real duplicate Chat action; original locator unchanged, redundant workspace-back removed in the first loop. First-batch regressions cover first connection, missing-model identity, global IME shortcuts, modal favourite guards and search/escape focus. New CI pending; no local app/tests/build/UI/provider/vault execution.
+
+Failed run20261101T011258Z-e0a72fd5cf14 retained2reports/21captures/two metadata; all21 inspected and82 CI/120 transport hashes/native provenance matched before source changes. Release/performance/final demo not reached. Supported cleanup933b0e13881c4c1bad8eb351c0bca5bd/stable request pavane-9b26363-disposal-001 is recovery-busy and sent no guest request, including one same-request resume. Original job-6559abca71b647bc935078eb60a6a13b/reservation-726815627a0442cfba26a24c008b7223/guard/input remain held. Do not move transport or dispatch a new native job without mechanical receipt. Source/CI work proceeds separately; installed2.7 adapter pinned as recorded in ledger. Accepted executable remains02bc628.
+
+## Earlier Open Canvas — implementation source checkpoint
 
 PV-UX-CANVAS-001 working under Sol. Dylan selected R2-B and refined R3-B / Open Canvas — Deep Charcoal, then explicitly authorized implementation and a demonstration. [Exact retained reference, contract, pending verification and rollback](../OPEN-CANVAS.md). Prior A recommendation is superseded. Drawer starts closed; rail/profile/breadcrumb/visible storage and keyboard footer/prompt chips are gone. Unified history keeps temporary expiry, creation menu discloses 30 days, header owns Keep and workspace editing. Model stays inside the composer at left; dark neutral reply/composer cards follow the selected image.
 

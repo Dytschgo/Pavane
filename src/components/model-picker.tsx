@@ -65,7 +65,7 @@ export function ModelPicker({
     (connecting
       ? "Connecting models"
       : preferences.selected.length
-        ? "Model unavailable"
+        ? `${preferences.selected[0].split(":").slice(1).join(":") || preferences.selected[0]} (unavailable)`
         : "Choose model");
   const triggerLabel =
     preferences.selected.length > 1
@@ -152,7 +152,9 @@ export function ModelPicker({
     setDetails(null);
     if (!preferences.compare) finishSelection();
   }
-  const TriggerIcon = providerPresentation(selected?.provider ?? "Ollama").icon;
+  const TriggerIcon = providerPresentation(
+    selected?.provider ?? preferences.selected[0]?.split(":")[0] ?? "",
+  ).icon;
   return (
     <Popover.Root
       open={open}

@@ -74,7 +74,7 @@ beforeEach(() => {
 
 it.each([
   { connecting: true, label: "Connecting models" },
-  { connecting: false, label: "Model unavailable" },
+  { connecting: false, label: "sol (unavailable)" },
 ])(
   "describes an undiscovered saved model truthfully: $label",
   async ({ connecting, label }) => {

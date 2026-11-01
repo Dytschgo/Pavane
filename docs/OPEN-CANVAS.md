@@ -12,7 +12,7 @@ Ctrl+K opens drawer search; Tab stays in the drawer, Escape closes it and return
 
 ## Verification and limits
 
-Source checkpoint only; changed CI and source-bound native acceptance are pending. No application tests, builds, UI, provider or vault calls ran on the working PC. Formatting and diff review are the local checks. The earlier 02bc628 native build remains the accepted executable until this candidate passes.
+CI9b26363 passed. Changed native acceptance failed after22 workflows at duplicate Chat navigation; the first of20 authorized improvement loops removes the redundant action without changing the native assertion. [Exact loop/evidence/custody record](HILL-CLIMB-20.md). Corrected CI/native acceptance is pending. No application tests, builds, UI, provider or vault calls ran on the working PC. Formatting and diff review are the local checks. The earlier 02bc628 native build remains the accepted executable until this candidate passes.
 
 Three new renderer cases cover drawer dismissal/focus/draft retention, direct search and one temporary row, and explicit temporary creation. Existing affected tests open the actual drawer before navigation; they retain their draft/provider/expiry negatives. Native helpers follow the same visible path, rather than querying hidden navigation. Existing save-state assertions read the accessible output; they still require authoritative acknowledgement.
 

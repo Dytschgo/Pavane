@@ -36,7 +36,7 @@ export function Modal({
             }
           }}
           onEscapeKeyDown={(event) => {
-            if (!dismissible) event.preventDefault();
+            if (!dismissible || event.isComposing) event.preventDefault();
           }}
           onPointerDownOutside={(event) => {
             if (!dismissible) event.preventDefault();

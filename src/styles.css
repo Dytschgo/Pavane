@@ -1012,17 +1012,6 @@ p {
   line-height: 1.7;
   max-inline-size: 340px;
 }
-.workspace-back {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding-block: 10px;
-  padding-inline: 8px;
-  background: transparent;
-  color: var(--muted-foreground);
-  border: none;
-  font-size: 11px;
-}
 .sidebar-workspace-title {
   display: flex;
   align-items: center;
@@ -1097,8 +1086,7 @@ p {
 @media (hover: hover) and (pointer: fine) {
   .button-ghost:hover,
   .chat-row:hover,
-  .device-status:hover,
-  .workspace-back:hover {
+  .device-status:hover {
     color: var(--foreground);
     background: var(--accent);
   }
@@ -1914,4 +1902,8 @@ p {
   inline-size: 44px;
   block-size: 44px;
   min-block-size: 44px;
+}
+
+.welcome-connect {
+  margin-block-start: 20px;
 }
