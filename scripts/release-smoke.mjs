@@ -7,6 +7,7 @@ import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
+import { closeNavigation, openNavigation } from "./navigation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const executable = join(
@@ -150,11 +151,14 @@ try {
           path: join(evidence, "release-empty.png"),
         });
         for (const name of ["Projects", "Spaces", "Bots", "Chat"]) {
+          await openNavigation(page);
           await page.getByRole("button", { name, exact: true }).click();
+          await openNavigation(page);
           await page
             .getByRole("button", { name, exact: true })
             .getAttribute("aria-current")
             .then((value) => assert.equal(value, "page"));
+          await closeNavigation(page);
         }
         await input.fill("A draft saved by the standalone release");
         await page

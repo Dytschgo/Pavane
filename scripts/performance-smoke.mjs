@@ -10,6 +10,7 @@ import { chromium } from "playwright-core";
 import { verificationContext } from "./verification-context.mjs";
 import { summarizeCpuProfile } from "./cpu-profile.mjs";
 import { observedBudgetViolations } from "./performance-budget.mjs";
+import { openNavigation } from "./navigation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const labelIndex = process.argv.indexOf("--label");
@@ -621,6 +622,7 @@ try {
   }, historyTurns);
   await page.reload();
   await editor.waitFor();
+  await openNavigation(page);
   await page
     .getByRole("button", { name: "Open chat HISTORY_00", exact: true })
     .click();
